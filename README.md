@@ -4,7 +4,7 @@ This is the codebase accompanying the NeurIPS submission, Genesis: Embodiment Co
 
 Note to reviewers:
 1. The codebase will be further cleaned-up in time for camera-ready submission and released on GitHub.
-2. This codebase does *not* reveal any author identity:  Our code is in `Genesis/` and is fully anonymized.
+2. This codebase does *not* reveal any author identity:  Our code in this repository is fully anonymized.
 
 # Setup
 Let's start with python 3.9. It's recommend to create a `conda` env:
