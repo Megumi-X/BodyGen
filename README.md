@@ -42,7 +42,7 @@ Note you may have to follow https://pytorch.org/ setup instructions for installa
     <br>
 <p>
 
-Please refer to the [project webpage](genesisorigin.github.io) for more visualization results.
+Please refer to this [webpage](https://genesisorigin.github.io) for more visualization results.
 
 ## Pretrained Models
 We also provide pretrained models in `Genesis/pretrained_models` for visualization. 
@@ -81,7 +81,7 @@ For example, you can use `pretrained_models` to visualize the co-design embodied
 python design_opt/eval.py --train_dir /Path/to/Genesis/pretrained_models/cheetah
 ```
 
-You can press `S` to slow the agent, and `F` to speed up. 
+Press `S` to slow the agent, and `F` to speed up. 
 
 # 💻 Training
 ```
@@ -100,7 +100,7 @@ EXPT="crawler"
 OMP_NUM_THREADS=1 python -m design_opt.train -m cfg=$EXPT group=$EXPT
 ```
 
-You can replace `crawler` with {`crawler`, `terraincrosser`, `cheetah`, `swimmer`, `glider-regular`, `glider-medium`, `glider-hard`, `walker-regular`, `walker-medium`, `walker-hard`} to train other environments.
+Replace `crawler` with {`crawler`, `terraincrosser`, `cheetah`, `swimmer`, `glider-regular`, `glider-medium`, `glider-hard`, `walker-regular`, `walker-medium`, `walker-hard`} to train other environments.
 
 - `OMP_NUM_THREADS=1` is essential to prevent CPU ops from hanging.
 
