@@ -4,7 +4,7 @@ This is the codebase for Genesis: Embodiment Co-Design via Efficient Message and
 
 <p align="center">
     <br>
-    <img src="figures/framework.png" width="400"/>
+    <img src="figures/framework.png"/>
     <br>
 <p>
 
