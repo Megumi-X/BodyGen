@@ -1,10 +1,12 @@
 # Genesis: Embodiment Co-Design via Efficient Message and Reward Delivery
 
-This is the codebase accompanying the NeurIPS submission, Genesis: Embodiment Co-Design via Efficient Message and Reward Delivery
+This is the codebase for Genesis: Embodiment Co-Design via Efficient Message and Reward Delivery.
 
-Note to reviewers:
-1. The codebase will be further cleaned-up in time for camera-ready submission and released on GitHub.
-2. This codebase does *not* reveal any author identity:  Our code in this repository is fully anonymized.
+<p align="center">
+    <br>
+    <img src="figures/framework.png" width="400"/>
+    <br>
+<p>
 
 # Setup
 Let's start with python 3.9. It's recommend to create a `conda` env:
@@ -78,7 +80,7 @@ pretrained_models/
   |-- cheetah/
   |-- crawler/
   |-- ...
-  |- walker-regular/
+  |-- walker-regular/
 ...
 scripts/
 ```
@@ -97,8 +99,5 @@ python design_opt/eval.py --train_dir /Path/to/Genesis/pretrained_models/cheetah
 
 You can press `S` to slow the agent, and `F` to speed up. 
 
-The agent is moving quite fast, even for realtime! You can slow it down by pressing `S` on your keyboard for detailed observation.
-
-# Questions?
-
-For any questions, please reach out to authors in the rebuttal phase!
+# License
+Please see the [license](LICENSE) for further details.
