@@ -35,6 +35,9 @@ pip install -r requirements.txt
 Note you may have to follow https://pytorch.org/ setup instructions for installation on your own machine.
 
 # Training and Visualization
+
+Please refer to the [project webpage](genesisorigin.github.io) for more visualization results.
+
 ## Training
 ```
 cd Genesis
@@ -87,6 +90,13 @@ scripts/
 
 
 ## Visualization
+
+<p align="center">
+    <br>
+    <img src="figures/visualization.png"/>
+    <br>
+<p>
+
 If you have a GUI display, you can run the following command to visualize the pretrained model:
 ```
 python design_opt/eval.py --train_dir <path_of_model_folder>
