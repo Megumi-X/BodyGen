@@ -8,16 +8,16 @@ This is the codebase for Genesis: Embodiment Co-Design via Efficient Message and
     <br>
 <p>
 
-# Setup
+# 🛠️ Setup
 Let's start with python 3.9. It's recommend to create a `conda` env:
 
-## Create new conda env 
+## Create a new conda environment 
 ```
 conda create -n Genesis python=3.9
 conda activate Genesis
 ```
 
-## Install for MuJoCo Simulator and mujoco-py
+## Install for MuJoCo Simulator and mujoco-py (Important)
 Install mujoco-py following the instruction [here](https://github.com/openai/mujoco-py#install-mujoco).
 
 Set the following environment variable to avoid problems with multiprocess trajectory sampling:
@@ -34,7 +34,7 @@ pip install -r requirements.txt
 
 Note you may have to follow https://pytorch.org/ setup instructions for installation on your own machine.
 
-# Visualization
+# 👀 Visualization
 
 <p align="center">
     <br>
@@ -83,7 +83,7 @@ python design_opt/eval.py --train_dir /Path/to/Genesis/pretrained_models/cheetah
 
 You can press `S` to slow the agent, and `F` to speed up. 
 
-# Training
+# 💻 Training
 ```
 cd Genesis
 chmod 777 scripts/Run_Genesis.sh
@@ -109,5 +109,5 @@ for the list of available experiments.
 
 - Other hyperparameters are explained in `Genesis/Genesis/design_opt/conf/config.yaml` and our paper.
 
-# License
+# 🏷️ License
 Please see the [license](LICENSE) for further details.
