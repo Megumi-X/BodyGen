@@ -38,32 +38,6 @@ Note you may have to follow https://pytorch.org/ setup instructions for installa
 
 Please refer to the [project webpage](genesisorigin.github.io) for more visualization results.
 
-## Training
-```
-cd Genesis
-chmod 777 scripts/Run_Genesis.sh
-./scripts/Run_Genesis.sh
-```
-Use the scripts `scripts/Run_Genesis.sh`, which contain preconfigured arguments and hyperparameters for **all** the experiments in the paper.  Experiments use Hydra to manage configuration.
-
-Visualizing results requires `wandb`: configure project name with the `project` key in `Genesis/design_opt/conf/config.yaml`.
-
-As an example of how to run, this runs Genesis on the `crawler` environment:
-
-```
-EXPT="crawler"
-OMP_NUM_THREADS=1 python -m design_opt.train -m cfg=$EXPT group=$EXPT
-```
-
-You can replace `crawler` with {`crawler`, `terraincrosser`, `cheetah`, `swimmer`, `glider-regular`, `glider-medium`, `glider-hard`, `walker-regular`, `walker-medium`, `walker-hard`} to train other environments.
-
-- `OMP_NUM_THREADS=1` is essential to prevent CPU ops from hanging.
-
-- The environment is selected with the `cfg=` flag, each of which corresponds to a YAML file in `Genesis/design_opt/cfg`. See that folder
-for the list of available experiments.
-
-- Other hyperparameters are explained in `Genesis/Genesis/design_opt/conf/config.yaml` and our paper.
-
 ## Pretrained Models
 We also provide pretrained models in `Genesis/pretrained_models` for visualization. 
 
@@ -108,6 +82,32 @@ python design_opt/eval.py --train_dir /Path/to/Genesis/pretrained_models/cheetah
 ```
 
 You can press `S` to slow the agent, and `F` to speed up. 
+
+## Training from Scratch
+```
+cd Genesis
+chmod 777 scripts/Run_Genesis.sh
+./scripts/Run_Genesis.sh
+```
+Use the scripts `scripts/Run_Genesis.sh`, which contain preconfigured arguments and hyperparameters for **all** the experiments in the paper.  Experiments use Hydra to manage configuration.
+
+Visualizing results requires `wandb`: configure project name with the `project` key in `Genesis/design_opt/conf/config.yaml`.
+
+As an example of how to run, this runs Genesis on the `crawler` environment:
+
+```
+EXPT="crawler"
+OMP_NUM_THREADS=1 python -m design_opt.train -m cfg=$EXPT group=$EXPT
+```
+
+You can replace `crawler` with {`crawler`, `terraincrosser`, `cheetah`, `swimmer`, `glider-regular`, `glider-medium`, `glider-hard`, `walker-regular`, `walker-medium`, `walker-hard`} to train other environments.
+
+- `OMP_NUM_THREADS=1` is essential to prevent CPU ops from hanging.
+
+- The environment is selected with the `cfg=` flag, each of which corresponds to a YAML file in `Genesis/design_opt/cfg`. See that folder
+for the list of available experiments.
+
+- Other hyperparameters are explained in `Genesis/Genesis/design_opt/conf/config.yaml` and our paper.
 
 # License
 Please see the [license](LICENSE) for further details.
