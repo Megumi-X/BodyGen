@@ -34,7 +34,13 @@ pip install -r requirements.txt
 
 Note you may have to follow https://pytorch.org/ setup instructions for installation on your own machine.
 
-# Training and Visualization
+# Visualization
+
+<p align="center">
+    <br>
+    <img src="figures/visualization.png"/>
+    <br>
+<p>
 
 Please refer to the [project webpage](genesisorigin.github.io) for more visualization results.
 
@@ -63,13 +69,7 @@ scripts/
 ```
 
 
-## Visualization
-
-<p align="center">
-    <br>
-    <img src="figures/visualization.png"/>
-    <br>
-<p>
+## Interactive Visualization
 
 If you have a GUI display, you can run the following command to visualize the pretrained model:
 ```
@@ -83,7 +83,7 @@ python design_opt/eval.py --train_dir /Path/to/Genesis/pretrained_models/cheetah
 
 You can press `S` to slow the agent, and `F` to speed up. 
 
-## Training from Scratch
+# Training
 ```
 cd Genesis
 chmod 777 scripts/Run_Genesis.sh
