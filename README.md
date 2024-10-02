@@ -1,6 +1,6 @@
-# Genesis: Embodiment Co-Design via Efficient Message and Reward Delivery
+# Genesis: Advancing Towards Efficient Embodiment Co-Design
 
-This is the codebase for Genesis: Embodiment Co-Design via Efficient Message and Reward Delivery.
+This is the codebase for Genesis: Advancing Towards Efficient Embodiment Co-Design.
 
 <p align="center">
     <br>
