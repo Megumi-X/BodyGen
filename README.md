@@ -1,5 +1,15 @@
 # Genesis: Advancing Towards Efficient Embodiment Co-Design
 
+<p align="center">
+·
+Paper
+·
+<a href="https://github.com/GenesisOrigin/Genesis">Code</a>
+·
+<a href="https://genesisorigin.github.io">Webpage</a>
+·
+</p>
+
 This is the codebase for Genesis: Advancing Towards Efficient Embodiment Co-Design.
 
 <p align="center">
