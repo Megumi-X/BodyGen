@@ -5,12 +5,11 @@ import math
 import logging
 
 class MaskedSelfAttention(nn.Module):
-    def __init__(self, hidden_dim, pos_emb_type="none") -> None:
+    def __init__(self, hidden_dim) -> None:
         super().__init__()
         self.fc_q = nn.Linear(hidden_dim, hidden_dim)
         self.fc_k = nn.Linear(hidden_dim, hidden_dim)
         self.fc_v = nn.Linear(hidden_dim, hidden_dim)
-        self.pos_emb_type = pos_emb_type
         
     def scaled_dot_product_attention(self, query, key, value, attn_mask=None, dropout_p=0.0):
         L, S = query.size(-2), key.size(-2)
@@ -34,19 +33,12 @@ class MaskedSelfAttention(nn.Module):
         return out
 
 class TransformerBlock(nn.Module):
-    def __init__(self, hidden_dim, pos_emb_type="none", norm_type="pre", act_layer=nn.SiLU) -> None:
-        '''
-        hidden_dim: token dim
-        block_depth: number of Transformer Block
-        pos_emb_type: position embedding methods: none, absolute_rope, relative_rope
-        norm_type: layer norm methods: pre, post
-        '''
+    def __init__(self, hidden_dim, norm_type="pre", act_layer=nn.SiLU) -> None:
         super().__init__()
         HIDDEN_RATIO = 4
-        self.pos_emb_type = pos_emb_type
         self.norm_type = norm_type
         
-        self.attn = MaskedSelfAttention(hidden_dim, pos_emb_type)
+        self.attn = MaskedSelfAttention(hidden_dim)
         self.norm1 = nn.LayerNorm(hidden_dim)
         self.mlp = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim * HIDDEN_RATIO),
@@ -81,32 +73,26 @@ class TransformerSimple(nn.Module):
         
         self.in_fc = nn.Linear(in_dim, hidden_dim)
         
-        if pos_emb_type == "lapPE":
-            self.lapPE_proj = nn.Linear(lapPE_k, hidden_dim)
-        elif pos_emb_type == "index":
+        if pos_emb_type == "index":
             self.index_embedding = nn.Embedding(256, hidden_dim)
         elif pos_emb_type == "travel":
             self.travel_embedding = nn.Embedding(256, hidden_dim)
             
         self.blocks = nn.ModuleList([
-            TransformerBlock(hidden_dim, pos_emb_type, norm_type) for _ in range(num_layers)
+            TransformerBlock(hidden_dim, norm_type) for _ in range(num_layers)
         ])
         
     def forward(self, transformer_obs):
 
         x = transformer_obs["padded_obs"]
         padding_mask = transformer_obs["padding_mask"]
-        distances = transformer_obs["padded_distances"]
-        lapPE = transformer_obs["padded_lapPE"]
         padded_body_ind = transformer_obs["padded_body_ind"]
         
         # project to hidden dimension
         x = self.in_fc(x)
 
         # position embedding
-        if self.pos_emb_type == "lapPE":
-            x = x + self.lapPE_proj(lapPE)
-        elif self.pos_emb_type == "index":
+        if self.pos_emb_type == "index":
             pos_emb = self.index_embedding(padded_body_ind)
             x = x + pos_emb
         elif self.pos_emb_type == "travel":

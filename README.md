@@ -2,7 +2,7 @@
 
 <p align="center">
 ·
-Paper
+<a href="https://openreview.net/pdf?id=cTR17xl89h">Paper</a>
 ·
 <a href="https://github.com/GenesisOrigin/Genesis">Code</a>
 ·
@@ -10,7 +10,7 @@ Paper
 ·
 </p>
 
-This is the codebase for Genesis: Advancing Towards Efficient Embodiment Co-Design.
+This is the codebase for Genesis: Advancing Towards Efficient Embodiment Co-Design (ICLR 2025).
 
 <p align="center">
     <br>
@@ -119,5 +119,24 @@ for the list of available experiments.
 
 - Other hyperparameters are explained in `Genesis/Genesis/design_opt/conf/config.yaml` and our paper.
 
+# 💗 Acknowledgement
+* [Transform2Act](https://github.com/Khrylx/Transform2Act)
+* [NGE](https://github.com/WilsonWangTHU/neural_graph_evolution)
+* [One-Policy-to-Control-Them-All](https://github.com/huangwl18/modular-rl)
+* [SARD](https://github.com/drdh/SARD)
+
 # 🏷️ License
 Please see the [license](LICENSE) for further details.
+
+# 📝 Citation
+If you find our work useful in your research, please consider citing:
+```
+@inproceedings{
+lu2025genesis,
+title={Genesis: Advancing Towards Efficient Embodiment Co-Design},
+author={Haofei Lu and Zhe Wu and Junliang Xing and Jianshu Li and Ruoyu Li and Zhe Li and Yuanchun Shi},
+booktitle={The Thirteenth International Conference on Learning Representations},
+year={2025},
+url={https://openreview.net/forum?id=cTR17xl89h}
+}
+```

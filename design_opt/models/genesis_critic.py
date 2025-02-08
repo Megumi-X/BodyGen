@@ -128,8 +128,7 @@ class GenesisValue(nn.Module):
         ## get current stage, generate stage masks (x3)
         stages = ['skel_trans', 'attr_trans', 'execution']
         x_dict = defaultdict(list)
-        node_design_mask = defaultdict(list) ## 长度为joint的个数，bool
-        # design_mask = defaultdict(list) ## 长度为batch的个数，bool
+        node_design_mask = defaultdict(list)
         total_num_nodes = 0
         for i, x_i in enumerate(x):
             num = x_i[3].item()
@@ -137,11 +136,9 @@ class GenesisValue(nn.Module):
             x_dict[cur_stage].append(x_i)
             for stage in stages:
                 node_design_mask[stage] += [cur_stage == stage] * num
-                # design_mask[stage].append(cur_stage == stage)
             total_num_nodes += num
         for stage in stages:
             node_design_mask[stage] = torch.BoolTensor(node_design_mask[stage])
-            # design_mask[stage] = torch.BoolTensor(design_mask[stage])
         
         value_nodes = torch.zeros(total_num_nodes, 1).to(x[0][0].device)
         
