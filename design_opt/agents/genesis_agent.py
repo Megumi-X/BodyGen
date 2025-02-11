@@ -6,8 +6,8 @@ from khrylib.utils.torch import *
 from khrylib.rl.agents import AgentPPO
 from torch.utils.tensorboard import SummaryWriter
 from design_opt.envs import env_dict
-from design_opt.models.genesis_policy import GenesisPolicy
-from design_opt.models.genesis_critic import GenesisValue
+from design_opt.models.bodygen_policy import BodyGenPolicy
+from design_opt.models.bodygen_critic import BodyGenValue
 from design_opt.utils.logger import LoggerRLV1
 from design_opt.utils.tools import TrajBatchDisc
 import multiprocessing
@@ -23,7 +23,7 @@ def tensorfy(np_list, device=torch.device('cpu')):
         return [torch.tensor(y).to(device) for y in np_list]
 
 
-class GenesisAgent(AgentPPO):
+class BodyGenAgent(AgentPPO):
 
     def __init__(self, cfg, dtype, device, seed, num_threads, training=True, checkpoint=0):
         self.cfg = cfg
@@ -78,12 +78,12 @@ class GenesisAgent(AgentPPO):
         
     def setup_policy(self):
         cfg = self.cfg
-        self.policy_net = GenesisPolicy(cfg.policy_specs, self)
+        self.policy_net = BodyGenPolicy(cfg.policy_specs, self)
         to_device(self.device, self.policy_net)
         
     def setup_value(self):
         cfg = self.cfg
-        self.value_net = GenesisValue(cfg.value_specs, self)
+        self.value_net = BodyGenValue(cfg.value_specs, self)
         to_device(self.device, self.value_net)
         
     def setup_optimizer(self):

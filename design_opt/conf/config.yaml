@@ -1,5 +1,5 @@
 group: evolving  # Experiment id
-project: Genesis
+project: BodyGen
 enable_wandb: false
 
 cfg: null

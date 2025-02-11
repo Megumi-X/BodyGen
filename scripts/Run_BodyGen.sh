@@ -1,5 +1,5 @@
 N="range(1)"
-MODEL="Genesis"
+MODEL="BodyGen"
 EXPTS="crawler terraincrosser cheetah swimmer glider-regular glider-medium glider-hard walker-regular walker-medium walker-hard"
 SEED=0
 

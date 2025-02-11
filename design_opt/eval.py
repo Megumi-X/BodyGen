@@ -8,7 +8,7 @@ from omegaconf import OmegaConf
 
 from khrylib.utils import *
 from design_opt.utils.config import Config
-from design_opt.agents.genesis_agent import GenesisAgent
+from design_opt.agents.genesis_agent import BodyGenAgent
 
 project_path = os.getcwd()
 
@@ -37,6 +37,6 @@ torch.manual_seed(cfg.seed)
 epoch = int(args.epoch) if args.epoch.isnumeric() else args.epoch
 
 """create agent"""
-agent = GenesisAgent(cfg=cfg, dtype=dtype, device=device, seed=cfg.seed, num_threads=1, training=False, checkpoint=epoch)
+agent = BodyGenAgent(cfg=cfg, dtype=dtype, device=device, seed=cfg.seed, num_threads=1, training=False, checkpoint=epoch)
 
 agent.visualize_agent(num_episode=4, save_video=args.save_video, pause_design=args.pause_design)

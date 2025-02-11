@@ -11,7 +11,7 @@ from torch.nn.utils.rnn import pad_sequence
 import logging
 
 
-class GenesisValue(nn.Module):
+class BodyGenValue(nn.Module):
     def __init__(self, cfg, agent):
         super().__init__()
         self.cfg = cfg

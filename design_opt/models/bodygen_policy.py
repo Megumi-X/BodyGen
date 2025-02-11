@@ -13,7 +13,7 @@ from torch.nn.utils.rnn import pad_sequence
 import logging
 
 
-class GenesisPolicy(Policy):
+class BodyGenPolicy(Policy):
     def __init__(self, cfg, agent):
         super().__init__()
         self.type = 'gaussian'

@@ -5,7 +5,7 @@ sys.path.append(os.getcwd())
 
 from khrylib.utils import *
 from design_opt.utils.config import Config
-from design_opt.agents.genesis_agent import GenesisAgent
+from design_opt.agents.genesis_agent import BodyGenAgent
 
 import wandb
 import hydra
@@ -29,7 +29,7 @@ def main_loop(FLAGS):
     start_epoch = int(FLAGS.epoch) if FLAGS.epoch.isnumeric() else FLAGS.epoch
 
     """create agent"""
-    agent = GenesisAgent(cfg=cfg, dtype=dtype, device=device, seed=cfg.seed, num_threads=FLAGS.num_threads, training=True, checkpoint=start_epoch)    
+    agent = BodyGenAgent(cfg=cfg, dtype=dtype, device=device, seed=cfg.seed, num_threads=FLAGS.num_threads, training=True, checkpoint=start_epoch)    
 
     if FLAGS.render:
         agent.pre_epoch_update(start_epoch)
