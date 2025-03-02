@@ -52,7 +52,7 @@ Note you may have to follow https://pytorch.org/ setup instructions for installa
     <br>
 <p>
 
-Please refer to this [webpage](https://genesisorigin.github.io) for more visualization results.
+Please refer to this [website](https://genesisorigin.github.io) for more visualization results. If you want to visualize the pretrained models, please refer to the following section.
 
 ### Pretrained Models
 We also provide pretrained models in `BodyGen/pretrained_models` for visualization. 
