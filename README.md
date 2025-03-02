@@ -18,16 +18,16 @@ This repository contains the PyTorch implementation of *"BodyGen: Advancing Towa
     <br>
 <p>
 
-# 🛠️ Setup
+## 🛠️ Setup
 Let's start with python 3.9. It's recommend to create a `conda` env:
 
-## Create a new conda environment 
+### Create a new conda environment 
 ```
 conda create -n BodyGen python=3.9
 conda activate BodyGen
 ```
 
-## Install for MuJoCo Simulator and mujoco-py (Important)
+### Install for MuJoCo Simulator and mujoco-py (Important)
 Install mujoco-py following the instruction [here](https://github.com/openai/mujoco-py#install-mujoco).
 
 Set the following environment variable to avoid problems with multiprocess trajectory sampling:
@@ -37,14 +37,14 @@ export OMP_NUM_THREADS=1
 
 (Optional) For MacOS user, you can follow the `README_FOR_MAC.md` to install MuJoCo on M1/M2/M3 Mac, which is helpful for embodied agents visualization.
 
-## Install
+### Install dependencies
 ```
 pip install -r requirements.txt
 ```
 
 Note you may have to follow https://pytorch.org/ setup instructions for installation on your own machine.
 
-# 👀 Visualization
+## 👀 Visualization
 
 <p align="center">
     <br>
@@ -54,7 +54,7 @@ Note you may have to follow https://pytorch.org/ setup instructions for installa
 
 Please refer to this [webpage](https://genesisorigin.github.io) for more visualization results.
 
-## Pretrained Models
+### Pretrained Models
 We also provide pretrained models in `BodyGen/pretrained_models` for visualization. 
 
 * You can download pretrained models from [Google Drive](https://drive.google.com/file/d/1TYRl8FI8TWEkXr1wYGOsW0au--GUBnce/view?usp=sharing)
@@ -79,7 +79,7 @@ scripts/
 ```
 
 
-## Interactive Visualization
+### Interactive Visualization Locally
 
 If you have a GUI display, you can run the following command to visualize the pretrained model:
 ```
@@ -93,7 +93,7 @@ python design_opt/eval.py --train_dir /Path/to/BodyGen/pretrained_models/cheetah
 
 Press `S` to slow the agent, and `F` to speed up. 
 
-# 💻 Training
+## 💻 Training
 ```
 cd BodyGen
 chmod 777 scripts/Run_BodyGen.sh
@@ -119,16 +119,16 @@ for the list of available experiments.
 
 - Other hyperparameters are explained in `BodyGen/design_opt/conf/config.yaml` and our paper.
 
-# 🏷️ License
+## 🏷️ License
 Please see the [license](LICENSE) for further details.
 
-# Acknowledgement
+## 🙏 Acknowledgement
 * Our initial code is based on the [Transform2Act](https://github.com/Khrylx/Transform2Act). Thanks for their great work and the discussion with the authors.
 * We also refer to the [Neural Graph Evolution (NGE)](https://github.com/WilsonWangTHU/neural_graph_evolution) and [One-Policy-to-Control-Them-All](https://github.com/huangwl18/modular-rl) during the implementation.
 * The initial designs are based on [Transformer2Act](https://github.com/Khrylx/Transform2Act), [OpenAI Gym](https://github.com/openai/gym), and [DeepMind dm_control](https://github.com/google-deepmind/dm_control). All the algorithms are evaluated with the same sets of initial designs.
 * The backend engine is based on the [MuJoCo](https://github.com/google-deepmind/mujoco), and we are planning to bump to the latest version of official MuJoCo bindings (>3.0.1) in the future.
 
-# Citation
+## 📚 Citation
 If you find our work useful in your research, please consider citing:
 ```
 @inproceedings{
