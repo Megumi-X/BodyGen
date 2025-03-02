@@ -119,16 +119,16 @@ for the list of available experiments.
 
 - Other hyperparameters are explained in `BodyGen/design_opt/conf/config.yaml` and our paper.
 
-# 💗 Acknowledgement
-* [Transform2Act](https://github.com/Khrylx/Transform2Act)
-* [NGE](https://github.com/WilsonWangTHU/neural_graph_evolution)
-* [One-Policy-to-Control-Them-All](https://github.com/huangwl18/modular-rl)
-* [SARD](https://github.com/drdh/SARD)
-
 # 🏷️ License
 Please see the [license](LICENSE) for further details.
 
-# 📝 Citation
+# Acknowledgement
+* Our initial code is based on the [Transform2Act](https://github.com/Khrylx/Transform2Act). Thanks for their great work and the discussion with the authors.
+* We also refer to the [Neural Graph Evolution (NGE)](https://github.com/WilsonWangTHU/neural_graph_evolution) and [One-Policy-to-Control-Them-All](https://github.com/huangwl18/modular-rl) during the implementation.
+* The initial designs are based on [Transformer2Act](https://github.com/Khrylx/Transform2Act), [OpenAI Gym](https://github.com/openai/gym), and [DeepMind dm_control](https://github.com/google-deepmind/dm_control). All the algorithms are evaluated with the same sets of initial designs.
+* The backend engine is based on the [MuJoCo](https://github.com/google-deepmind/mujoco), and we are planning to bump to the latest version of official MuJoCo bindings (>3.0.1) in the future.
+
+# Citation
 If you find our work useful in your research, please consider citing:
 ```
 @inproceedings{
