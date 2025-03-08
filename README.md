@@ -54,7 +54,7 @@ Note you may have to follow https://pytorch.org/ setup instructions for installa
 
 Please refer to this [website](https://genesisorigin.github.io) for more visualization results. If you want to visualize the pretrained models, please refer to the following section.
 
-### Pretrained Models
+### (Optional) Pretrained Models for Playing
 We also provide pretrained models in `BodyGen/pretrained_models` for visualization. 
 
 * You can download pretrained models from [Google Drive](https://drive.google.com/file/d/1TYRl8FI8TWEkXr1wYGOsW0au--GUBnce/view?usp=sharing)
@@ -77,7 +77,7 @@ pretrained_models/
 ...
 scripts/
 ```
-
+Our pretrained models are also available on [Hugging Face](https://huggingface.co/Josh00/BodyGen). You can download the pretrained models, and place the `pretrained_models` folder under the root directory (./BodyGen) of this repo.
 
 ### Interactive Visualization Locally
 
