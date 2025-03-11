@@ -8,6 +8,7 @@
 ·
 <a href="https://genesisorigin.github.io">Website</a>
 ·
+<a href="https://huggingface.co/Josh00/BodyGen">Hugging Face</a>
 </p>
 
 This repository contains the PyTorch implementation of *"BodyGen: Advancing Towards Efficient Embodiment Co-Design."* (ICLR 2025, Spotlight)
