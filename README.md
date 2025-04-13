@@ -11,7 +11,7 @@
 <a href="https://huggingface.co/Josh00/BodyGen">Hugging Face</a>
 </p>
 
-This repository contains the PyTorch implementation of *"BodyGen: Advancing Towards Efficient Embodiment Co-Design."* (ICLR 2025, Spotlight)
+This repository contains the PyTorch implementation of *"BodyGen: Advancing Towards Efficient Embodiment Co-Design."* (ICLR 2025, Spotlight). Here is our [poster](https://x.com/josh00_lu/status/1911402125818548569). Glad to chat & connect in Singapore. ☺️
 
 <p align="center">
     <br>
