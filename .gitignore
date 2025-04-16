@@ -1,6 +1,7 @@
 .DS_Store
 multirun
 hyper
+pretrained_models/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

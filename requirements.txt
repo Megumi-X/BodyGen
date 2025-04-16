@@ -1,5 +1,6 @@
 torch==2.0.1
 gym==0.15.4
+numpy<1.23.0
 opencv-python
 glfw
 pyyaml
