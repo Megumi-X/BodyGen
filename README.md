@@ -6,7 +6,7 @@
 ·
 <a href="https://github.com/GenesisOrigin/BodyGen">Code</a>
 ·
-<a href="https://genesisorigin.github.io">Website</a>
+<a href="https://genesisorigin.github.io">Webpage</a>
 ·
 <a href="https://huggingface.co/Josh00/BodyGen">Hugging Face</a>
 </p>
