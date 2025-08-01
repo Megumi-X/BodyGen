@@ -49,6 +49,7 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
         self.ground_geoms = np.where(self.model.geom_bodyid == 0)[0]
         self.actuator_masks = None
         self.reconfig_action_ratio = cfg.reconfig_specs.get('reconfig_action_ratio', 50)
+        self.reconfig_state_count = {}
 
     def allow_add_body(self, body):
         add_body_condition = self.cfg.add_body_condition
@@ -135,7 +136,7 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
         self.reconfig_fix()
         return True
 
-    def step(self, a):
+    def step(self, a, train=True):
         if not self.is_inited:
             return self._get_obs(), 0, False, False, {'use_transform_action': False, 'stage': 'execution'}
 
@@ -183,7 +184,10 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
                 return self._get_obs(), 0.0, True, False, {'use_transform_action': False, 'stage': 'reconfig'}
 
             ob = self._get_obs()
-            reward = -np.sum(self.actuator_masks) * self.cfg.reconfig_specs.get('reconfig_reward_scale', 0.1)
+            reward = 0
+            if train:
+                self.reconfig_state_count[reconfig_a.tobytes()] = self.reconfig_state_count.get(reconfig_a.tobytes(), 0) + 1
+                reward = self.cfg.reconfig_specs.get('intrinsic_reward_coeff', 20.0) / np.sqrt(self.reconfig_state_count[reconfig_a.tobytes()])
             termination = truncation = False
             return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'reconfig'}
         # execution stage
@@ -210,12 +214,11 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
             s = self.state_vector()
             # misc
             done_condition = self.cfg.done_condition
-            min_height = done_condition.get('min_height', -15.0)
+            min_height = done_condition.get('min_height', -5.0)
             max_height = done_condition.get('max_height', 5.0)
-            local_height = np.clip((posafter - 5.0) * 8 / 20, 0, 8)
             max_ang = done_condition.get('max_ang', 3600)
             max_nsteps = done_condition.get('max_nsteps', 1000)
-            termination = not (np.isfinite(s).all() and (height - local_height > min_height) and (height - local_height < max_height) and (abs(ang) < np.deg2rad(max_ang)))
+            termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height) and (abs(ang) < np.deg2rad(max_ang)))
             truncation = not (self.control_nsteps < max_nsteps)
             ob = self._get_obs()
             if self.control_nsteps % self.reconfig_action_ratio == 0:

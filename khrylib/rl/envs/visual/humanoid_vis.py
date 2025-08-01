@@ -8,7 +8,7 @@ class HumanoidVisEnv(mujoco_env.MujocoEnv):
         self.set_cam_first = set()
         self.focus = focus
 
-    def step(self, a):
+    def step(self, a, train=True):
         return np.zeros((10, 1)), 0, False, dict()
 
     def reset_model(self):

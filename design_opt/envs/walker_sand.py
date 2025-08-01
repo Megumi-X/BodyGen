@@ -109,7 +109,7 @@ class WalkerSandEnv(MujocoEnv, utils.EzPickle):
             ctrl[aind] = body_a
         return ctrl        
 
-    def step(self, a):
+    def step(self, a, train=True):
         if not self.is_inited:
             return self._get_obs(), 0, False, False, {'use_transform_action': False, 'stage': 'execution'}
 
@@ -172,8 +172,8 @@ class WalkerSandEnv(MujocoEnv, utils.EzPickle):
             s = self.state_vector()
             # misc
             done_condition = self.cfg.done_condition
-            min_height = done_condition.get('min_height', -1)
-            max_height = done_condition.get('max_height', 3.0)
+            min_height = done_condition.get('min_height', -5.0)
+            max_height = done_condition.get('max_height', 8.0)
             max_ang = done_condition.get('max_ang', 3600)
             max_nsteps = done_condition.get('max_nsteps', 1000)
             termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height) and (abs(ang) < np.deg2rad(max_ang)))

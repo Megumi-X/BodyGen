@@ -109,7 +109,7 @@ class AntWallEnv(MujocoEnv, utils.EzPickle):
                 ctrl[aind] = body_a
         return ctrl        
 
-    def step(self, a):
+    def step(self, a, train=True):
         if not self.is_inited:
             return self._get_obs(), 0, False, False, {'use_transform_action': False, 'stage': 'execution'}
 

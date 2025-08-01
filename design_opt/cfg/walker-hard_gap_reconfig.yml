@@ -27,6 +27,7 @@ add_body_condition:
 
 reconfig_specs:
   reconfig: true
+  intrinsic_reward_coeff: 20.0
 
 robot:
   param_mapping: sin

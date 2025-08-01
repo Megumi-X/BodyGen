@@ -537,6 +537,7 @@ class BodyGenAgent(AgentPPO):
     def visualize_agent(self, num_episode=1, mean_action=True, save_video=False, max_num_frames=1000):
         fr = 0
         env = self.env
+        total_reward = 0
 
         if self.cfg.uni_obs_norm:
             self.obs_norm.eval()
@@ -550,7 +551,8 @@ class BodyGenAgent(AgentPPO):
                     state_var = self.normalize_observation(state_var)
                 with torch.no_grad():
                     action = self.policy_net.select_action(state_var, mean_action).numpy().astype(np.float64)
-                next_state, env_reward, termination, truncation, info = env.step(action)
+                next_state, env_reward, termination, truncation, info = env.step(action, train=False)
+                total_reward += env_reward
                 done = (termination or truncation)
                 if save_video:
                     frame = env.render(mode='rgb_array', width=640, height=480)
