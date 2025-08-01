@@ -63,6 +63,7 @@ policy_specs:
 
   skel_message_type: 'transformer'
   control_message_type: 'transformer'
+  reconfig_message_type: 'transformer'
   attr_message_type: 'transformer'
 
   skel_transformer_specs:
@@ -72,6 +73,12 @@ policy_specs:
     norm_type: pre
 
   attr_transformer_specs:
+    pos_emb_type: index
+    block_depth: 3
+    hidden_dim: 64
+    norm_type: pre
+
+  reconfig_transformer_specs:
     pos_emb_type: index
     block_depth: 3
     hidden_dim: 64
@@ -88,6 +95,10 @@ policy_specs:
     rescale_linear: true
     max_index: 10
   control_shared_mlp:
+    hdims: [128, 128]
+    rescale_linear: true
+    max_index: 10
+  reconfig_shared_mlp:
     hdims: [128, 128]
     rescale_linear: true
     max_index: 10

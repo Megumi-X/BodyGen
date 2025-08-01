@@ -7,7 +7,9 @@ from khrylib.rl.agents import AgentPPO
 from torch.utils.tensorboard import SummaryWriter
 from design_opt.envs import env_dict
 from design_opt.models.bodygen_policy import BodyGenPolicy
+from design_opt.models.bodygen_policy_reconfig import BodyGenPolicyReconfig
 from design_opt.models.bodygen_critic import BodyGenValue
+from design_opt.models.bodygen_critic_reconfig import BodyGenReconfigValue
 from design_opt.utils.logger import LoggerRLV1
 from design_opt.utils.tools import TrajBatchDisc
 import multiprocessing
@@ -30,6 +32,7 @@ class BodyGenAgent(AgentPPO):
         self.training = training
         self.device = device
         self.loss_iter = 0
+        self.use_reconfig = cfg.reconfig_specs.get('reconfig', False)
         self.setup_env()
         self.env.seed(seed)
         self.setup_logger()
@@ -66,7 +69,7 @@ class BodyGenAgent(AgentPPO):
         self.state_dim = self.attr_fixed_dim + self.sim_obs_dim + self.attr_design_dim
         self.control_action_dim = env.control_action_dim
         self.skel_num_action = env.skel_num_action
-        self.action_dim = self.control_action_dim + self.attr_design_dim
+        self.action_dim = 2 * self.control_action_dim + self.attr_design_dim
         self.running_state = None
         
     def setup_logger(self):
@@ -78,12 +81,20 @@ class BodyGenAgent(AgentPPO):
         
     def setup_policy(self):
         cfg = self.cfg
-        self.policy_net = BodyGenPolicy(cfg.policy_specs, self)
+        if self.use_reconfig:
+            print("Using Reconfigurable Policy Network")
+            self.policy_net = BodyGenPolicyReconfig(cfg.policy_specs, self)
+        else:
+            self.policy_net = BodyGenPolicy(cfg.policy_specs, self)
         to_device(self.device, self.policy_net)
         
     def setup_value(self):
         cfg = self.cfg
-        self.value_net = BodyGenValue(cfg.value_specs, self)
+        if self.use_reconfig:
+            print("Using Reconfigurable Value Network")
+            self.value_net = BodyGenReconfigValue(cfg.value_specs, self)
+        else:
+            self.value_net = BodyGenValue(cfg.value_specs, self)
         to_device(self.device, self.value_net)
         
     def setup_optimizer(self):
@@ -340,11 +351,17 @@ class BodyGenAgent(AgentPPO):
         return x
 
     def get_perm_batch_design(self, states):
-        inds = [[], [], []]
+        if self.use_reconfig:
+            inds = [[], [], [], []]
+        else:
+            inds = [[], [], []]
         for i, x in enumerate(states):
             use_transform_action = x[2]
             inds[use_transform_action.item()].append(i)
-        perm = np.array(inds[0] + inds[1] + inds[2])
+        if self.use_reconfig:
+            perm = np.array(inds[0] + inds[1] + inds[2] + inds[3])
+        else:
+            perm = np.array(inds[0] + inds[1] + inds[2])
         return perm, LongTensor(perm).to(self.device)
 
     def update_policy(self, states, next_states, rewards, next_terminations, next_dones, actions, exps):
@@ -517,52 +534,41 @@ class BodyGenAgent(AgentPPO):
                 'reward_shift': self.cfg.reward_shift 
             }, step = epoch * self.cfg.min_batch_size)
 
-    def visualize_agent(self, num_episode=1, mean_action=True, save_video=False, pause_design=False, max_num_frames=1000):
+    def visualize_agent(self, num_episode=1, mean_action=True, save_video=False, max_num_frames=1000):
         fr = 0
         env = self.env
-        paused = not save_video and pause_design
-        
+
         if self.cfg.uni_obs_norm:
             self.obs_norm.eval()
             self.obs_norm.to('cpu')
-        
+
         for _ in range(num_episode):
             state = env.reset()
-
-            env._get_viewer('human')._paused = paused
-            env.render()
             for t in range(10000):
                 state_var = tensorfy([state])
-                
-                ## do obs norm (none-updated)
                 if self.cfg.uni_obs_norm:
                     state_var = self.normalize_observation(state_var)
-                        
                 with torch.no_grad():
                     action = self.policy_net.select_action(state_var, mean_action).numpy().astype(np.float64)
                 next_state, env_reward, termination, truncation, info = env.step(action)
                 done = (termination or truncation)
-                
-                if t < self.cfg.skel_transform_nsteps + 1:
-                    env._get_viewer('human')._paused = paused
-                    env._get_viewer('human')._hide_overlay = save_video
-                for _ in range(15 if save_video else 1):
-                    env.render()
                 if save_video:
+                    frame = env.render(mode='rgb_array', width=640, height=480)
                     frame_dir = f'out/videos/{self.cfg.id}_frames'
                     os.makedirs(frame_dir, exist_ok=True)
-                    save_screen_shots(env.viewer.window, f'{frame_dir}/%04d.png' % fr)
+                    img = Image.fromarray(frame)
+                    img.save(f'{frame_dir}/%04d.png' % fr)
                     fr += 1
                     if fr >= max_num_frames:
                         break
-
                 if done:
                     break
                 state = next_state
-
             if save_video and fr >= max_num_frames:
                 break
 
         if save_video:
+            frame_dir = f'out/videos/{self.cfg.id}_frames'
             save_video_ffmpeg(f'{frame_dir}/%04d.png', f'out/videos/{self.cfg.id}.mp4', fps=30)
-            shutil.rmtree(frame_dir)
+            if os.path.exists(frame_dir):
+                shutil.rmtree(frame_dir)

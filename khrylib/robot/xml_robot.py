@@ -7,6 +7,7 @@ from lxml import etree
 from io import BytesIO
 from scipy.sparse.linalg import eigsh
 from scipy.linalg import fractional_matrix_power
+from sympy import false
 
 
 def parse_vec(string):
@@ -62,6 +63,8 @@ class Joint:
             self.axis = vec_to_polar(parse_vec(node.attrib['axis']))
         if self.local_coord:
             self.pos += body.pos
+        self.reconfig_joint = False
+        self.locked = False
         assert(np.all(self.pos == body.pos))
     
     def __repr__(self):
@@ -530,6 +533,13 @@ class Robot:
 
         for body_node_c in body_node.findall('body'):
             self.add_body(body_node_c, body)
+    
+    def set_reconfig_joint(self, joint_name):
+        for body in self.bodies:
+            for joint in body.joints:
+                if joint.name == joint_name:
+                    joint.reconfig_joint = True
+                    return
 
     def init_bodies(self):
         for body in self.bodies:

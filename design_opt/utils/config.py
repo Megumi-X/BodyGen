@@ -94,4 +94,7 @@ class Config:
         self.robot_param_scale = cfg.get('robot_param_scale', 0.1)
         self.robot_cfg = cfg.get('robot', dict())
 
+        # reconfig
+        self.reconfig_specs = cfg.get('reconfig_specs', dict())
+
 
