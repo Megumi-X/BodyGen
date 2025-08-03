@@ -1,4 +1,4 @@
-env_name: walker_wall_reconfig
+env_name: walker_gap_reconfig
 agent_specs:
   batch_design: true
 # training parameters
@@ -11,7 +11,7 @@ robot_param_scale: 1
 skel_transform_nsteps: 5
 
 done_condition:
-  max_ang: 60
+  max_ang: 720
 
 obs_specs:
   attr: ['depth']

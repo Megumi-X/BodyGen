@@ -1,4 +1,4 @@
-env_name: walker_gap
+env_name: walker_sand_reconfig
 agent_specs:
   batch_design: true
 # training parameters
@@ -24,6 +24,10 @@ max_body_depth: 4
 
 add_body_condition:
   max_nchild: 3
+
+reconfig_specs:
+  reconfig: true
+  intrinsic_reward_coeff: 30.0
 
 robot:
   param_mapping: sin

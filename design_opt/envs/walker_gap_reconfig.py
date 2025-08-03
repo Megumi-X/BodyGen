@@ -214,8 +214,8 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
             s = self.state_vector()
             # misc
             done_condition = self.cfg.done_condition
-            min_height = done_condition.get('min_height', -5.0)
-            max_height = done_condition.get('max_height', 5.0)
+            min_height = done_condition.get('min_height', -2.0)
+            max_height = done_condition.get('max_height', 10.0)
             max_ang = done_condition.get('max_ang', 3600)
             max_nsteps = done_condition.get('max_nsteps', 1000)
             termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height) and (abs(ang) < np.deg2rad(max_ang)))

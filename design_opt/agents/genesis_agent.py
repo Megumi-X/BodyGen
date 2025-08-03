@@ -574,3 +574,4 @@ class BodyGenAgent(AgentPPO):
             save_video_ffmpeg(f'{frame_dir}/%04d.png', f'out/videos/{self.cfg.id}.mp4', fps=30)
             if os.path.exists(frame_dir):
                 shutil.rmtree(frame_dir)
+        return total_reward / num_episode if num_episode > 0 else 0
