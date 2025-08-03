@@ -1,7 +1,7 @@
 N="range(1)"
 MODEL="BodyGen"
 # EXPTS="crawler terraincrosser cheetah swimmer glider-regular glider-medium glider-hard walker-regular walker-medium walker-hard"
-EXPTS="walker-hard_gap_reconfig_10"
+EXPTS="walker-hard_wall_reconfig_30"
 SEED=0
 
 for EXPT in $EXPTS; do
