@@ -20,7 +20,7 @@ parser.add_argument('--save_video', action='store_true', default=False)
 parser.add_argument('--pause_design', action='store_true', default=False)
 args = parser.parse_args()
 
-rewards = {}
+rewards = json.load(open(os.path.join(project_path, "out", "rewards.json"), 'r')) if os.path.exists(os.path.join(project_path, "out", "rewards.json")) else {}
 for d in args.train_dir:
     train_dir = os.path.join(d, "0")
 
