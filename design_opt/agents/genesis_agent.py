@@ -540,7 +540,6 @@ class BodyGenAgent(AgentPPO):
         fr = 0
         env = self.env
         total_reward = 0
-        glfw.init()
 
         if self.cfg.uni_obs_norm:
             self.obs_norm.eval()
@@ -548,6 +547,7 @@ class BodyGenAgent(AgentPPO):
 
         n = 0
         for _ in range(num_episode):
+            glfw.init()
             state = env.reset()
             n += 1
             for t in range(10000):
@@ -571,6 +571,7 @@ class BodyGenAgent(AgentPPO):
                 if done:
                     break
                 state = next_state
+            glfw.terminate()
             if save_video and fr >= max_num_frames:
                 break
 
@@ -579,5 +580,4 @@ class BodyGenAgent(AgentPPO):
             save_video_ffmpeg(f'{frame_dir}/%04d.png', f'out/videos/{self.cfg.id}.mp4', fps=30)
             if os.path.exists(frame_dir):
                 shutil.rmtree(frame_dir)
-            glfw.terminate()
         return total_reward / n
