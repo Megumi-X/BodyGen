@@ -44,4 +44,4 @@ for d in args.train_dir:
 
     reward = agent.visualize_agent(num_episode=4, save_video=args.save_video)
     rewards[d] = reward
-json.dump(rewards, open(os.path.join(project_path, "out", "rewards.json"), 'w'), indent=4)
+    json.dump(rewards, open(os.path.join(project_path, "out", "rewards.json"), 'w'), indent=4)
