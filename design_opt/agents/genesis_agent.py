@@ -1,6 +1,8 @@
 import math
 import pickle
 import time
+
+import glfw
 from khrylib.utils import *
 from khrylib.utils.torch import *
 from khrylib.rl.agents import AgentPPO
@@ -538,13 +540,16 @@ class BodyGenAgent(AgentPPO):
         fr = 0
         env = self.env
         total_reward = 0
+        glfw.init()
 
         if self.cfg.uni_obs_norm:
             self.obs_norm.eval()
             self.obs_norm.to('cpu')
 
+        n = 0
         for _ in range(num_episode):
             state = env.reset()
+            n += 1
             for t in range(10000):
                 state_var = tensorfy([state])
                 if self.cfg.uni_obs_norm:
@@ -574,4 +579,5 @@ class BodyGenAgent(AgentPPO):
             save_video_ffmpeg(f'{frame_dir}/%04d.png', f'out/videos/{self.cfg.id}.mp4', fps=30)
             if os.path.exists(frame_dir):
                 shutil.rmtree(frame_dir)
-        return total_reward / num_episode if num_episode > 0 else 0
+            glfw.terminate()
+        return total_reward / n
