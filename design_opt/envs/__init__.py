@@ -16,6 +16,7 @@ from .walker_gap_reconfig import WalkerGapReconfigEnv
 from .walker_sand import WalkerSandEnv
 from .walker_wall_reconfig import WalkerWallReconfigEnv
 from .walker_sand_reconfig import WalkerSandReconfigEnv
+from .ant_single_reconfig import AntSingleReconfigEnv
 
 
 env_dict = {
@@ -37,4 +38,5 @@ env_dict = {
     'walker_sand': WalkerSandEnv,
     'walker_wall_reconfig': WalkerWallReconfigEnv,
     'walker_sand_reconfig': WalkerSandReconfigEnv,
+    'ant_single_reconfig': AntSingleReconfigEnv,
 }
