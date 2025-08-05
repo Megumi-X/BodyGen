@@ -213,7 +213,7 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
         
 
     def if_use_transform_action(self):
-        return ['skeleton_transform', 'attribute_transform', 'execution'].index(self.stage)
+        return ['skeleton_transform', 'attribute_transform', 'reconfig', 'execution'].index(self.stage)
 
     def get_sim_obs(self):
         obs = []
@@ -349,7 +349,7 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
     def reset_model(self):
         self.reset_robot()
         self.control_nsteps = 0
-        self.stage = 'skeleton_transform'
+        self.stage = 'reconfig'
         self.cur_t = 0
         self.reset_state(False)
         return self._get_obs()
