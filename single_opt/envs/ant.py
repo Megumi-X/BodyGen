@@ -1,3 +1,4 @@
+from matplotlib.pylab import f
 import numpy as np
 from gym import utils
 from khrylib.rl.envs.common.mujoco_env_gym import MujocoEnv
@@ -6,153 +7,97 @@ from khrylib.utils import get_single_body_qposaddr, get_graph_fc_edges
 from khrylib.utils.transformation import quaternion_matrix
 from copy import deepcopy
 import mujoco_py
-import time
-import os
+from gym.spaces import Box
 
 
-class AntTunnelEnv(MujocoEnv, utils.EzPickle):
-    def __init__(self, cfg, agent):
-        self.cur_t = 0
-        self.cfg = cfg
-        self.env_specs = cfg.env_specs
-        self.agent = agent
-        if self.cfg.xml_name == "default":
-            self.model_xml_file = os.path.join(cfg.project_path, "assets", "mujoco_envs", "ant_tunnel.xml")
-        else:
-            self.model_xml_file = os.path.join(cfg.project_path, "assets", "mujoco_envs", f"{self.cfg.xml_name}.xml")
-        # robot xml
-        self.robot = Robot(cfg.robot_cfg, xml=self.model_xml_file)
-        self.init_xml_str = self.robot.export_xml_string()
-        self.cur_xml_str = self.init_xml_str.decode('utf-8')
-        # design options
-        self.clip_qvel = cfg.obs_specs.get('clip_qvel', False)
-        self.use_projected_params = cfg.obs_specs.get('use_projected_params', True)
-        self.abs_design = cfg.obs_specs.get('abs_design', False)
-        self.use_body_ind = cfg.obs_specs.get('use_body_ind', False)
-        self.use_body_depth_height = cfg.obs_specs.get('use_body_depth_height', False)
-        self.use_shortest_distance = cfg.obs_specs.get('use_shortest_distance', False)
-        self.use_position_encoding = cfg.obs_specs.get('use_position_encoding', False)
-        self.design_ref_params = self.get_attr_design()
-        self.design_cur_params = self.design_ref_params.copy()
-        self.design_param_names = self.robot.get_params(get_name=True)
-        self.attr_design_dim = self.design_ref_params.shape[-1]
-        self.index_base = 5
-        self.stage = 'skeleton_transform'    # transform or execute
-        self.control_nsteps = 0
-        self.sim_specs = set(cfg.obs_specs.get('sim', []))
-        self.attr_specs = set(cfg.obs_specs.get('attr', []))
-        MujocoEnv.__init__(self, self.model_xml_file, 4)
-        utils.EzPickle.__init__(self)
-        self.control_action_dim = 1
-        self.skel_num_action = 3 if cfg.enable_remove else 2
-        self.sim_obs_dim = self.get_sim_obs().shape[-1]
-        self.attr_fixed_dim = self.get_attr_fixed().shape[-1]
+class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
+    metadata = {
+        "render_modes": [
+            "human",
+            "rgb_array",
+            "depth_array",
+        ],
+        "render_fps": 125,
+    }
 
-    def allow_add_body(self, body):
-        add_body_condition = self.cfg.add_body_condition
-        max_nchild = add_body_condition.get('max_nchild', 3)
-        min_nchild = add_body_condition.get('min_nchild', 0)
-        return body.depth >= self.cfg.min_body_depth and body.depth < self.cfg.max_body_depth - 1 and len(body.child) < max_nchild and len(body.child) >= min_nchild
-    
-    def allow_remove_body(self, body):
-        if body.depth >= self.cfg.min_body_depth + 1 and len(body.child) == 0:
-            if body.depth == 1:
-                return body.parent.child.index(body) > 0
-            else:
-                return True
-        return False
+    def __init__(self, **kwargs):
+        utils.EzPickle.__init__(self, **kwargs)
+        
+        self.frame_skip = 4
+        xml_path = "assets/mujoco_envs/ant_single_reconfig.xml"
+        
+        self.model = mujoco_py.load_model_from_path(xml_path)
+        self.sim = mujoco_py.MjSim(self.model)
+        self.data = self.sim.data
+        self.viewer = None
+        self.init_qpos = self.data.qpos.ravel().copy()
+        self.init_qvel = self.data.qvel.ravel().copy()
 
-    def apply_skel_action(self, skel_action):
-        bodies = list(self.robot.bodies)
-        for body, a in zip(bodies, skel_action):
-            if a == 1 and self.allow_add_body(body):
-                self.robot.add_child_to_body(body)
-            if a == 2 and self.allow_remove_body(body):
-                self.robot.remove_body(body)
+        self.stage = 'reconfig'
+        # Observation space
+        obs_size = (self.model.nq) + self.model.nv + 1
+        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(obs_size,), dtype=np.float64)
+        
+        # Action space
+        self.action_space = Box(low=-1.0, high=1.0, shape=(self.model.nu), dtype=np.float64)
+        
+        self.step_count = 0
+        self.max_episode_steps = 1000
 
-        xml_str = self.robot.export_xml_string()
-        self.cur_xml_str = xml_str.decode('utf-8')
-        try:
-            self.reload_sim_model(xml_str.decode('utf-8'))
-        except:
-            print(self.cur_xml_str)
-            return False      
-        self.design_cur_params = self.get_attr_design()
-        return True
+        self.actuator_masks = None
+        self.reconfig_action_ratio = 50
+        self.init_joint_ranges = []
 
-    def set_design_params(self, in_design_params):
-        design_params = in_design_params
-        for params, body in zip(design_params, self.robot.bodies):
-            body.set_params(params, pad_zeros=True, map_params=True)
-            body.sync_node()
+        MujocoEnv.__init__(self, xml_path, self.frame_skip)
+        utils.EzPickle.__init__(self)   
 
-        xml_str = self.robot.export_xml_string()
-        self.cur_xml_str = xml_str.decode('utf-8')
-        try:
-            self.reload_sim_model(xml_str.decode('utf-8'))
-        except:
-            print(self.cur_xml_str)
-            return False
-        if self.use_projected_params:
-            self.design_cur_params = self.get_attr_design()
-        else:
-            self.design_cur_params = in_design_params.copy()
-        return True
+    def reconfig_fix(self):
+        for i in range(4):
+            joint_id = self.model.actuator_trnid[i, 0]
+            assert self.model.joint_names[joint_id] == f"{i + 1}_joint"
+            if self.actuator_masks[i] == 1:
+                qpos_address = self.model.jnt_qposadr[joint_id]
+                current_joint_pos = self.sim.data.qpos[qpos_address]
+                self.model.jnt_range[joint_id] = [current_joint_pos - 5e-2, current_joint_pos + 5e-2]
 
-    def action_to_control(self, a):
-        ctrl = np.zeros_like(self.data.ctrl)
-        assert a.shape[0] == len(self.robot.bodies)
-        for body, body_a in zip(self.robot.bodies[1:], a[1:]):
-            aname = body.get_actuator_name()
-            if aname in self.model.actuator_names:
-                aind = self.model.actuator_names.index(aname)
-                ctrl[aind] = body_a
-        return ctrl        
+    def reconfig_release(self):
+        for i in range(self.model.nu):
+            joint_id = self.model.actuator_trnid[i, 0]
+            if joint_id < 0:
+                continue
+            self.model.jnt_range[joint_id] = [-np.pi, np.pi]
 
-    def step(self, a, train=True):
+    def set_reconfig(self, reconfig_params):
+        self.reconfig_release()
+        self.actuator_masks = reconfig_params.copy()
+        self.reconfig_fix()
+        return True        
+
+    def step(self, a):
         if not self.is_inited:
             return self._get_obs(), 0, False, False, {'use_transform_action': False, 'stage': 'execution'}
 
         self.cur_t += 1
-        # skeleton transform stage
-        if self.stage == 'skeleton_transform':
-            skel_a = a[:, -1]
-            succ = self.apply_skel_action(skel_a)
-            if not succ:
-                return self._get_obs(), 0.0, True, False, {'use_transform_action': True, 'stage': 'skeleton_transform'}
-
-            if self.cur_t == self.cfg.skel_transform_nsteps:
-                self.transit_attribute_transform()
-
-            ob = self._get_obs()
-            reward = 0.0
-            termination = truncation = False
-            return ob, reward, termination, truncation, {'use_transform_action': True, 'stage': 'skeleton_transform'}
-        # attribute transform stage
-        elif self.stage == 'attribute_transform':
-            design_a = a[:, self.control_action_dim:-1] 
-            if self.abs_design:
-                design_params = design_a * self.cfg.robot_param_scale
-            else:
-                design_params = self.design_cur_params + design_a * self.cfg.robot_param_scale
-            succ = self.set_design_params(design_params)
-            if not succ:
-                return self._get_obs(), 0.0, True, False, {'use_transform_action': True, 'stage': 'attribute_transform'}
-
-            if self.cur_t == self.cfg.skel_transform_nsteps + 1:
+        # reconfig stage
+        if self.stage == 'reconfig':
+            reconfig_a = a[:, 1]
+            self.set_reconfig(reconfig_a)
+            if self.control_nsteps == 0:
                 succ = self.transit_execution()
-                if not succ:
-                    return self._get_obs(), 0.0, True, False, {'use_transform_action': True, 'stage': 'attribute_transform'}
+            else:
+                succ = self.transit_execution_running()
+            if not succ:
+                return self._get_obs(), 0.0, True, False, {'use_transform_action': False, 'stage': 'reconfig'}
 
             ob = self._get_obs()
-            reward = 0.0
+            reward = 0
             termination = truncation = False
-            return ob, reward, termination, truncation, {'use_transform_action': True, 'stage': 'attribute_transform'}
+            return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'reconfig'}
         # execution stage
         else:
             self.control_nsteps += 1
             assert np.all(a[:, self.control_action_dim:] == 0)
-            control_a = a[:, :self.control_action_dim]
+            control_a = a[:, 0]
             ctrl = self.action_to_control(control_a)
             ctrl_cost_coeff = self.cfg.reward_specs.get('ctrl_cost_coeff', 1e-4)
             xposbefore = self.get_body_com("0")[0]
@@ -183,10 +128,12 @@ class AntTunnelEnv(MujocoEnv, utils.EzPickle):
             termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height) and (abs(ang) < np.deg2rad(max_ang)))
             truncation = not (self.control_nsteps < max_nsteps)
             ob = self._get_obs()
+            if self.control_nsteps % self.reconfig_action_ratio == 0:
+                self.transit_reconfig()
             return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'execution'}
-    
-    def transit_attribute_transform(self):
-        self.stage = 'attribute_transform'
+
+    def transit_reconfig(self):
+        self.stage = 'reconfig'
 
     def transit_execution(self):
         self.stage = 'execution'
@@ -197,10 +144,10 @@ class AntTunnelEnv(MujocoEnv, utils.EzPickle):
             print(self.cur_xml_str)
             return False
         return True
-        
-
-    def if_use_transform_action(self):
-        return ['skeleton_transform', 'attribute_transform', 'execution'].index(self.stage)
+    
+    def transit_execution_running(self):
+        self.stage = 'execution'
+        return True
 
     def get_sim_obs(self):
         obs = []
@@ -336,7 +283,7 @@ class AntTunnelEnv(MujocoEnv, utils.EzPickle):
     def reset_model(self):
         self.reset_robot()
         self.control_nsteps = 0
-        self.stage = 'skeleton_transform'
+        self.stage = 'reconfig'
         self.cur_t = 0
         self.reset_state(False)
         return self._get_obs()

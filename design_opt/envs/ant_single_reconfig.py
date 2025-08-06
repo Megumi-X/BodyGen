@@ -49,6 +49,7 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
         self.attr_fixed_dim = self.get_attr_fixed().shape[-1]
         self.actuator_masks = None
         self.reconfig_action_ratio = cfg.reconfig_specs.get('reconfig_action_ratio', 50)
+        self.init_joint_ranges = deepcopy(self.model.jnt_range)
 
     def allow_add_body(self, body):
         add_body_condition = self.cfg.add_body_condition
@@ -112,21 +113,20 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
         return ctrl
 
     def reconfig_fix(self):
-        for i in range(self.model.nu):
+        for i in range(4):
             joint_id = self.model.actuator_trnid[i, 0]
-            if joint_id < 0:
-                continue
+            assert self.model.joint_names[joint_id] == f"{i + 1}_joint"
             if self.actuator_masks[i] == 1:
                 qpos_address = self.model.jnt_qposadr[joint_id]
                 current_joint_pos = self.sim.data.qpos[qpos_address]
                 self.model.jnt_range[joint_id] = [current_joint_pos - 5e-2, current_joint_pos + 5e-2]
 
     def reconfig_release(self):
-        for i in range(self.model.nu):
+        for i in range(4):
             joint_id = self.model.actuator_trnid[i, 0]
             if joint_id < 0:
                 continue
-            self.model.jnt_range[joint_id] = [-np.pi, np.pi]
+            self.model.jnt_range[joint_id] = self.init_joint_ranges[joint_id].copy()
 
     def set_reconfig(self, reconfig_params):
         reconfig_params = self.action_to_control(reconfig_params)
@@ -135,7 +135,7 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
         self.reconfig_fix()
         return True        
 
-    def step(self, a):
+    def step(self, a, train=True):
         if not self.is_inited:
             return self._get_obs(), 0, False, False, {'use_transform_action': False, 'stage': 'execution'}
 
@@ -184,10 +184,10 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
             ang = np.arccos(zdir[2])
             done_condition = self.cfg.done_condition
             min_height = done_condition.get('min_height', 0.0)
-            max_height = done_condition.get('max_height', 2.0)
+            max_height = done_condition.get('max_height', 3.0)
             max_ang = done_condition.get('max_ang', 3600)
             max_nsteps = done_condition.get('max_nsteps', 1000)
-            termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height) and (abs(ang) < np.deg2rad(max_ang)))
+            termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height))
             truncation = not (self.control_nsteps < max_nsteps)
             ob = self._get_obs()
             if self.control_nsteps % self.reconfig_action_ratio == 0:
@@ -213,7 +213,7 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
         
 
     def if_use_transform_action(self):
-        return ['skeleton_transform', 'attribute_transform', 'reconfig', 'execution'].index(self.stage)
+        return ['reconfig', 'execution'].index(self.stage)
 
     def get_sim_obs(self):
         obs = []

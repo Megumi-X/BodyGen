@@ -27,6 +27,7 @@ add_body_condition:
 
 reconfig_specs:
   reconfig: true
+  reconfig_single: true
 
 robot:
   param_mapping: sin
