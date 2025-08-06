@@ -15,6 +15,7 @@ from argparse import ArgumentParser
 
 # Import the custom environment
 from single_opt.envs.walker import WalkerEnv
+from single_opt.envs.ant import AntSingleReconfigEnv
 
 def tensorfy(np_list, device=torch.device('cpu')):
     if isinstance(np_list[0], list):
@@ -28,7 +29,7 @@ def train(log_path, model_path):
     os.makedirs(model_path, exist_ok=True)
 
     # Create the environment
-    env = DummyVecEnv([lambda: WalkerEnv()])
+    env = DummyVecEnv([lambda: AntSingleReconfigEnv()])
     env = vec_check_nan.VecCheckNan(env, raise_exception=True)
 
     # Setup PPO model
@@ -41,7 +42,7 @@ def train(log_path, model_path):
         n_steps=2048,
         batch_size=64,
         gamma=0.99,
-        learning_rate=3e-4,
+        learning_rate=1e-4,
         ent_coef=0.0,
         clip_range=0.2,
         n_epochs=10,
@@ -78,25 +79,11 @@ def train(log_path, model_path):
 
 def visualize(env, model_path, save_video=False, max_num_frames=1000):
     fr = 0
-    model = PPO(
-        "MlpPolicy", 
-        env, 
-        verbose=1,
-        tensorboard_log=log_path,
-        n_steps=2048,
-        batch_size=64,
-        gamma=0.99,
-        learning_rate=3e-4,
-        ent_coef=0.0,
-        clip_range=0.2,
-        n_epochs=10,
-        gae_lambda=0.95,
-        vf_coef=0.5,
-    )
+    model = PPO.load(os.path.join(model_path, "best_model.zip"))
     state = env.reset()
     for t in range(10000):
         action, _ = model.predict(state, deterministic=True)
-        next_state, env_reward, terminated, truncated, info = env.step(action)
+        next_state, env_reward, terminated, truncated, info = env.step(action, False)
         if save_video:
             frame = env.render(mode='rgb_array')
             frame_dir = f'out/videos/single_frames'
@@ -127,7 +114,7 @@ if __name__ == "__main__":
     if args.train:
         train(log_path, model_path)
     elif args.test:
-        visualize(WalkerEnv(), model_path, save_video=True)
+        visualize(AntSingleReconfigEnv(), model_path, save_video=True)
     else:
         print("Please specify --train or --test")
         exit(1)

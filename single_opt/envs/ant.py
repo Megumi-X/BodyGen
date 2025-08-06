@@ -1,13 +1,13 @@
 from matplotlib.pylab import f
 import numpy as np
 from gym import utils
+from gym import spaces
 from khrylib.rl.envs.common.mujoco_env_gym import MujocoEnv
 from khrylib.robot.xml_robot import Robot
 from khrylib.utils import get_single_body_qposaddr, get_graph_fc_edges
 from khrylib.utils.transformation import quaternion_matrix
-from copy import deepcopy
 import mujoco_py
-from gym.spaces import Box
+from gym.spaces import Box, MultiBinary
 
 
 class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
@@ -32,15 +32,22 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
         self.viewer = None
         self.init_qpos = self.data.qpos.ravel().copy()
         self.init_qvel = self.data.qvel.ravel().copy()
-
         self.stage = 'reconfig'
+
         # Observation space
-        obs_size = (self.model.nq) + self.model.nv + 1
+        obs_size = self._get_obs().shape[-1]
         self.observation_space = Box(low=-np.inf, high=np.inf, shape=(obs_size,), dtype=np.float64)
         
         # Action space
-        self.action_space = Box(low=-1.0, high=1.0, shape=(self.model.nu), dtype=np.float64)
-        
+        lows = np.concatenate([
+            np.full(self.model.nu, -1.0), # control 部分的下限
+            np.full(4, 0.0)               # reconfig 部分的下限
+        ])
+        highs = np.concatenate([
+            np.full(self.model.nu, 1.0), # control 部分的上限
+            np.full(4, 1.0)              # reconfig 部分的上限
+        ])
+            
         self.step_count = 0
         self.max_episode_steps = 1000
 
@@ -49,7 +56,9 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
         self.init_joint_ranges = []
 
         MujocoEnv.__init__(self, xml_path, self.frame_skip)
-        utils.EzPickle.__init__(self)   
+        utils.EzPickle.__init__(self)
+        self.action_space = Box(low=lows, high=highs, dtype=np.float64) 
+         
 
     def reconfig_fix(self):
         for i in range(4):
@@ -69,68 +78,79 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
 
     def set_reconfig(self, reconfig_params):
         self.reconfig_release()
-        self.actuator_masks = reconfig_params.copy()
+        self.actuator_masks = np.zeros(self.model.nu)
+        for i in range(4):
+            if reconfig_params[i] > 0.5:
+                self.actuator_masks[i] = 1
+            else:
+                self.actuator_masks[i] = 0
         self.reconfig_fix()
         return True        
 
-    def step(self, a):
+    def step(self, a, train=True):
         if not self.is_inited:
             return self._get_obs(), 0, False, False, {'use_transform_action': False, 'stage': 'execution'}
 
         self.cur_t += 1
         # reconfig stage
         if self.stage == 'reconfig':
-            reconfig_a = a[:, 1]
+            reconfig_a = a[self.model.nu:]
             self.set_reconfig(reconfig_a)
             if self.control_nsteps == 0:
                 succ = self.transit_execution()
             else:
                 succ = self.transit_execution_running()
             if not succ:
-                return self._get_obs(), 0.0, True, False, {'use_transform_action': False, 'stage': 'reconfig'}
+                if train:
+                    return self._get_obs(), 0.0, True, {'use_transform_action': False, 'stage': 'reconfig'}
+                else:
+                    return self._get_obs(), 0.0, True, False, {'use_transform_action': False, 'stage': 'reconfig'}
 
             ob = self._get_obs()
             reward = 0
             termination = truncation = False
-            return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'reconfig'}
+            if train:
+                return ob, reward, termination or truncation, {'use_transform_action': False, 'stage': 'reconfig'}
+            else:
+                return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'reconfig'}
         # execution stage
         else:
             self.control_nsteps += 1
-            assert np.all(a[:, self.control_action_dim:] == 0)
-            control_a = a[:, 0]
-            ctrl = self.action_to_control(control_a)
-            ctrl_cost_coeff = self.cfg.reward_specs.get('ctrl_cost_coeff', 1e-4)
+            ctrl = a[:self.model.nu] * (np.ones_like(self.actuator_masks) - self.actuator_masks)
+            ctrl_cost_coeff = 1e-4
             xposbefore = self.get_body_com("0")[0]
 
             try:
                 self.do_simulation(ctrl, self.frame_skip)
             except:
                 print(self.cur_xml_str)
-                return self._get_obs(), 0, True, False, {'use_transform_action': False, 'stage': 'execution'}
+                if train:
+                    return self._get_obs(), 0, True, {'use_transform_action': False, 'stage': 'execution'}
+                else:
+                    return self._get_obs(), 0, True, False, {'use_transform_action': False, 'stage': 'execution'}
 
             xposafter = self.get_body_com("0")[0]
             reward_fwd = (xposafter - xposbefore) / self.dt
             reward_ctrl = - ctrl_cost_coeff * np.square(ctrl).mean()
-            alive_bonus = self.cfg.reward_specs.get('alive_bonus', 0.0)
-            reward = reward_fwd + reward_ctrl + alive_bonus
-            scale = self.cfg.reward_specs.get('exec_reward_scale', 1.0)
-            reward *= scale
+            reward = reward_fwd + reward_ctrl
 
             s = self.state_vector()
             height = s[2]
             zdir = quaternion_matrix(s[3:7])[:3, 2]
             ang = np.arccos(zdir[2])
-            done_condition = self.cfg.done_condition
-            min_height = done_condition.get('min_height', 0.0)
-            max_height = done_condition.get('max_height', 2.0)
-            max_ang = done_condition.get('max_ang', 3600)
-            max_nsteps = done_condition.get('max_nsteps', 1000)
+            min_height = 0
+            max_height = 3
+            max_ang = 180
+            max_nsteps = 1000
             termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height) and (abs(ang) < np.deg2rad(max_ang)))
             truncation = not (self.control_nsteps < max_nsteps)
             ob = self._get_obs()
             if self.control_nsteps % self.reconfig_action_ratio == 0:
                 self.transit_reconfig()
-            return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'execution'}
+            if train:
+                return ob, reward, termination or truncation, {'use_transform_action': False, 'stage': 'execution'}
+            else:
+                return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'execution'}
 
     def transit_reconfig(self):
         self.stage = 'reconfig'
@@ -149,117 +169,12 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
         self.stage = 'execution'
         return True
 
-    def get_sim_obs(self):
-        obs = []
-        if 'root_offset' in self.sim_specs:
-            root_pos = self.data.body_xpos[self.model._body_name2id[self.robot.bodies[0].name]]
-            
-        for i, body in enumerate(self.robot.bodies):
-            qvel = self.data.qvel.copy()
-            if self.clip_qvel:
-                qvel = np.clip(qvel, -10, 10)
-            if i == 0:
-                obs_i = [self.data.qpos[2:7], qvel[:6], np.zeros(2)]
-            else:
-                qs, qe = get_single_body_qposaddr(self.model, body.name)
-                if qe - qs >= 1:
-                    assert qe - qs == 1
-                    obs_i = [np.zeros(11), self.data.qpos[qs:qe], qvel[qs-1:qe-1]]
-                    # print(qs)
-                else:
-                    obs_i = [np.zeros(13)]
-            if 'root_offset' in self.sim_specs:
-                offset = self.data.body_xpos[self.model._body_name2id[body.name]][[0, 2]] - root_pos[[0, 2]]
-                obs_i.append(offset)
-            obs_i = np.concatenate(obs_i)
-            obs.append(obs_i)
-        obs = np.stack(obs)
-        return obs
-
-    def get_attr_fixed(self):
-        obs = []
-        for i, body in enumerate(self.robot.bodies):
-            obs_i = []
-            if 'depth' in self.attr_specs:
-                obs_depth = np.zeros(self.cfg.max_body_depth)
-                obs_depth[body.depth] = 1.0
-                obs_i.append(obs_depth)
-            if 'jrange' in self.attr_specs:
-                obs_jrange = body.get_joint_range()
-                obs_i.append(obs_jrange)
-            if 'skel' in self.attr_specs:
-                obs_add = self.allow_add_body(body)
-                obs_rm = self.allow_remove_body(body)
-                obs_i.append(np.array([float(obs_add), float(obs_rm)]))
-            if len(obs_i) > 0:
-                obs_i = np.concatenate(obs_i)
-                obs.append(obs_i)
-        
-        if len(obs) == 0:
-            return None
-        obs = np.stack(obs)
-        return obs
-
-    def get_attr_design(self):
-        obs = []
-        for i, body in enumerate(self.robot.bodies):
-            obs_i = body.get_params([], pad_zeros=True, demap_params=True)
-            obs.append(obs_i)
-        obs = np.stack(obs)
-        return obs
-
-    def get_body_index(self):
-        index = []
-        for i, body in enumerate(self.robot.bodies):
-            ind = int(body.name, base=self.index_base)
-            index.append(ind)
-        index = np.array(index)
-        return index
-
-    def get_body_height(self):
-        heights = []
-        for i, body in enumerate(self.robot.bodies):
-            h = body.height
-            heights.append(h)
-        heights = np.array(heights)
-        return heights
-        
-    def get_body_depth(self):
-        depths = []
-        for i, body in enumerate(self.robot.bodies):
-            d = body.depth
-            depths.append(d)
-        depths = np.array(depths)
-        return depths
-
     def _get_obs(self):
-        obs = []
-        attr_fixed_obs = self.get_attr_fixed()
-        sim_obs = self.get_sim_obs()
-        design_obs = self.design_cur_params
-        obs = np.concatenate(list(filter(lambda x: x is not None, [attr_fixed_obs, sim_obs, design_obs])), axis=-1)
-        if self.cfg.obs_specs.get('fc_graph', False):
-            edges = get_graph_fc_edges(len(self.robot.bodies))
-        else:
-            edges = self.robot.get_gnn_edges()
-        use_transform_action = np.array([self.if_use_transform_action()])
-        num_nodes = np.array([sim_obs.shape[0]])
-        all_obs = [obs, edges, use_transform_action, num_nodes]
-        if self.use_body_ind:
-            body_index = self.get_body_index()
-            all_obs.append(body_index)
-        if self.use_body_depth_height:
-            body_depths = self.get_body_depth()
-            all_obs.append(body_depths)
-            body_heights = self.get_body_height()
-            all_obs.append(body_heights)
-        if self.use_shortest_distance:
-            distances = self.robot.get_shortest_distances()
-            all_obs.append(distances)
-        if self.use_position_encoding:
-            lapPE = self.robot.get_laplacian_position_encoding()
-            all_obs.append(lapPE)        
-        return all_obs
+        position = self.sim.data.qpos.flat[:]
+        velocity = self.sim.data.qvel.flat[:]
+        stage = 0 if self.stage == 'reconfig' else 1
+        obs = np.concatenate((position, velocity, [stage])).astype(np.float64)
+        return obs
 
     def reset_state(self, add_noise):
         if add_noise:
@@ -268,20 +183,10 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
         else:
             qpos = self.init_qpos
             qvel = self.init_qvel
-        if self.env_specs.get('init_height', True):
-            qpos[2] = 0.4
+        qpos[2] = 0.4
         self.set_state(qpos, qvel)
 
-    def reset_robot(self):
-        del self.robot
-        self.robot = Robot(self.cfg.robot_cfg, xml=self.init_xml_str, is_xml_str=True)
-        self.cur_xml_str = self.init_xml_str.decode('utf-8')
-        self.reload_sim_model(self.cur_xml_str)
-        self.design_ref_params = self.get_attr_design()
-        self.design_cur_params = self.design_ref_params.copy()
-
     def reset_model(self):
-        self.reset_robot()
         self.control_nsteps = 0
         self.stage = 'reconfig'
         self.cur_t = 0

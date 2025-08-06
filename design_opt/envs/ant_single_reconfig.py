@@ -160,7 +160,7 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
             self.control_nsteps += 1
             assert np.all(a[:, self.control_action_dim:] == 0)
             control_a = a[:, :self.control_action_dim]
-            ctrl = self.action_to_control(control_a)
+            ctrl = self.action_to_control(control_a) * (np.ones_like(self.actuator_masks) - self.actuator_masks)
             ctrl_cost_coeff = self.cfg.reward_specs.get('ctrl_cost_coeff', 1e-4)
             xposbefore = self.get_body_com("0")[0]
 
