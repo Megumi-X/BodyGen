@@ -11,7 +11,7 @@ robot_param_scale: 1
 skel_transform_nsteps: 5
 
 done_condition:
-  max_ang: 60
+  max_ang: 180
 
 obs_specs:
   attr: ['depth']

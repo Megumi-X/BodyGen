@@ -187,7 +187,7 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
             max_height = done_condition.get('max_height', 3.0)
             max_ang = done_condition.get('max_ang', 3600)
             max_nsteps = done_condition.get('max_nsteps', 1000)
-            termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height))
+            termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height) and (abs(ang) < np.deg2rad(max_ang)))
             truncation = not (self.control_nsteps < max_nsteps)
             ob = self._get_obs()
             if self.control_nsteps % self.reconfig_action_ratio == 0:
