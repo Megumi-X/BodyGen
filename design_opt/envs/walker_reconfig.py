@@ -9,13 +9,13 @@ import time
 import os
 
 
-class WalkerTunnelEnv(MujocoEnv, utils.EzPickle):
+class WalkerReconfigEnv(MujocoEnv, utils.EzPickle):
     def __init__(self, cfg, agent):
         self.cur_t = 0
         self.cfg = cfg
         self.agent = agent
         if self.cfg.xml_name == "default":
-            self.model_xml_file = os.path.join(cfg.project_path, "assets", "mujoco_envs", "walker_tunnel.xml")
+            self.model_xml_file = os.path.join(cfg.project_path, "assets", "mujoco_envs", "walker_wall.xml")
         else:
             self.model_xml_file = os.path.join(cfg.project_path, "assets", "mujoco_envs", f"{self.cfg.xml_name}.xml")
         # robot xml
@@ -47,6 +47,9 @@ class WalkerTunnelEnv(MujocoEnv, utils.EzPickle):
         self.sim_obs_dim = self.get_sim_obs().shape[-1]
         self.attr_fixed_dim = self.get_attr_fixed().shape[-1]
         self.ground_geoms = np.where(self.model.geom_bodyid == 0)[0]
+        self.actuator_masks = None
+        self.reconfig_action_ratio = cfg.reconfig_specs.get('reconfig_action_ratio', 25)
+        self.reconfig_state_count = {}
 
     def allow_add_body(self, body):
         add_body_condition = self.cfg.add_body_condition
@@ -107,7 +110,31 @@ class WalkerTunnelEnv(MujocoEnv, utils.EzPickle):
             aname = body.get_actuator_name()
             aind = self.model.actuator_names.index(aname)
             ctrl[aind] = body_a
-        return ctrl        
+        return ctrl
+    
+    def reconfig_fix(self):
+        for i in range(self.model.nu):
+            joint_id = self.model.actuator_trnid[i, 0]
+            if joint_id < 0:
+                continue
+            if self.actuator_masks[i] == 1:
+                qpos_address = self.model.jnt_qposadr[joint_id]
+                current_joint_pos = self.sim.data.qpos[qpos_address]
+                self.model.jnt_range[joint_id] = [current_joint_pos - 0.08, current_joint_pos + 0.08]
+
+    def reconfig_release(self):
+        for i in range(self.model.nu):
+            joint_id = self.model.actuator_trnid[i, 0]
+            if joint_id < 0:
+                continue
+            self.model.jnt_range[joint_id] = [-np.pi, np.pi]
+
+    def set_reconfig(self, reconfig_params):
+        reconfig_params = self.action_to_control(reconfig_params)
+        self.reconfig_release()
+        self.actuator_masks = reconfig_params.copy()
+        self.reconfig_fix()
+        return True
 
     def step(self, a, train=True):
         if not self.is_inited:
@@ -130,7 +157,7 @@ class WalkerTunnelEnv(MujocoEnv, utils.EzPickle):
             return ob, reward, termination, truncation, {'use_transform_action': True, 'stage': 'skeleton_transform'}
         # attribute transform stage
         elif self.stage == 'attribute_transform':
-            design_a = a[:, self.control_action_dim:-1] 
+            design_a = a[:, 2 * self.control_action_dim:-1] 
             if self.abs_design:
                 design_params = design_a * self.cfg.robot_param_scale
             else:
@@ -138,22 +165,37 @@ class WalkerTunnelEnv(MujocoEnv, utils.EzPickle):
             succ = self.set_design_params(design_params)
             if not succ:
                 return self._get_obs(), 0.0, True, False, {'use_transform_action': True, 'stage': 'attribute_transform'}
-
             if self.cur_t == self.cfg.skel_transform_nsteps + 1:
-                succ = self.transit_execution()
-                if not succ:
-                    return self._get_obs(), 0.0, True, False, {'use_transform_action': True, 'stage': 'attribute_transform'}
+                self.transit_reconfig()
 
             ob = self._get_obs()
             reward = 0.0
             termination = truncation = False
             return ob, reward, termination, truncation, {'use_transform_action': True, 'stage': 'attribute_transform'}
+        # reconfig stage
+        elif self.stage == 'reconfig':
+            reconfig_a = a[:, self.control_action_dim: 2 * self.control_action_dim]
+            self.set_reconfig(reconfig_a)
+            if self.control_nsteps == 0:
+                succ = self.transit_execution()
+            else:
+                succ = self.transit_execution_running()
+            if not succ:
+                return self._get_obs(), 0.0, True, False, {'use_transform_action': False, 'stage': 'reconfig'}
+
+            ob = self._get_obs()
+            reward = 0
+            if train:
+                self.reconfig_state_count[reconfig_a.tobytes()] = self.reconfig_state_count.get(reconfig_a.tobytes(), 0) + 1
+                reward = self.cfg.reconfig_specs.get('intrinsic_reward_coeff', 20.0) / np.sqrt(self.reconfig_state_count[reconfig_a.tobytes()])
+            termination = truncation = False
+            return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'reconfig'}
         # execution stage
         else:
             self.control_nsteps += 1
             assert np.all(a[:, self.control_action_dim:] == 0)
             control_a = a[:, :self.control_action_dim]
-            ctrl = self.action_to_control(control_a)
+            ctrl = self.action_to_control(control_a) * (np.ones_like(self.actuator_masks) - self.actuator_masks)
             posbefore = self.sim.data.qpos[0]
 
             try:
@@ -172,17 +214,22 @@ class WalkerTunnelEnv(MujocoEnv, utils.EzPickle):
             s = self.state_vector()
             # misc
             done_condition = self.cfg.done_condition
-            min_height = done_condition.get('min_height', 0.7)
-            max_height = done_condition.get('max_height', 2.0)
+            min_height = done_condition.get('min_height', 0.0)
+            max_height = done_condition.get('max_height', 5.0)
             max_ang = done_condition.get('max_ang', 3600)
             max_nsteps = done_condition.get('max_nsteps', 1000)
             termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height) and (abs(ang) < np.deg2rad(max_ang)))
             truncation = not (self.control_nsteps < max_nsteps)
             ob = self._get_obs()
+            if self.control_nsteps % self.reconfig_action_ratio == 0:
+                self.transit_reconfig()
             return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'execution'}
     
     def transit_attribute_transform(self):
         self.stage = 'attribute_transform'
+
+    def transit_reconfig(self):
+        self.stage = 'reconfig'
 
     def transit_execution(self):
         self.stage = 'execution'
@@ -193,10 +240,14 @@ class WalkerTunnelEnv(MujocoEnv, utils.EzPickle):
             print(self.cur_xml_str)
             return False
         return True
+    
+    def transit_execution_running(self):
+        self.stage = 'execution'
+        return True
         
 
     def if_use_transform_action(self):
-        return ['skeleton_transform', 'attribute_transform', 'execution'].index(self.stage)
+        return ['skeleton_transform', 'attribute_transform', 'reconfig', 'execution'].index(self.stage)
 
     def get_sim_obs(self):
         obs = []
@@ -332,6 +383,7 @@ class WalkerTunnelEnv(MujocoEnv, utils.EzPickle):
                     qpos[1] += 0.05
                 else:
                     break
+            self.reconfig_fix()
         else:
             self.set_state(qpos, qvel)
 

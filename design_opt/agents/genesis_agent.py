@@ -11,9 +11,13 @@ from design_opt.envs import env_dict
 from design_opt.models.bodygen_policy import BodyGenPolicy
 from design_opt.models.bodygen_policy_reconfig import BodyGenPolicyReconfig
 from design_opt.models.bodygen_policy_reconfig_single import BodyGenPolicyReconfigSingle
+from design_opt.models.bodygen_policy_single import BodyGenPolicySingle
+from design_opt.models.bodygen_critic_neo_reconfig import BodyGenNeoReconfigValue
 from design_opt.models.bodygen_critic import BodyGenValue
 from design_opt.models.bodygen_critic_reconfig import BodyGenReconfigValue
 from design_opt.models.bodygen_critic_reconfig_single import BodyGenValueReconfigSingle
+from design_opt.models.bodygen_critic_single import BodyGenValueSingle
+from design_opt.models.bodygen_policy_neo_reconfig import BodyGenPolicyNeoReconfig
 from design_opt.utils.logger import LoggerRLV1
 from design_opt.utils.tools import TrajBatchDisc
 import multiprocessing
@@ -38,6 +42,8 @@ class BodyGenAgent(AgentPPO):
         self.loss_iter = 0
         self.use_reconfig = cfg.reconfig_specs.get('reconfig', False)
         self.reconfig_single = cfg.reconfig_specs.get('reconfig_single', False)
+        self.use_single = cfg.reconfig_specs.get('use_single', False)
+        self.use_neo_reconfig = cfg.reconfig_specs.get('neo_reconfig', False)
         self.setup_env()
         self.env.seed(seed)
         self.setup_logger()
@@ -86,24 +92,36 @@ class BodyGenAgent(AgentPPO):
         
     def setup_policy(self):
         cfg = self.cfg
-        if self.use_reconfig and not self.reconfig_single:
+        if self.use_reconfig and not self.reconfig_single and not self.use_single:
             print("Using Reconfigurable Policy Network")
             self.policy_net = BodyGenPolicyReconfig(cfg.policy_specs, self)
-        elif self.use_reconfig and self.reconfig_single:
+        elif self.use_reconfig and self.reconfig_single and not self.use_single:
             print("Using Reconfigurable Single Policy Network")
             self.policy_net = BodyGenPolicyReconfigSingle(cfg.policy_specs, self)
+        elif self.use_single:
+            print("Using Single Policy Network")
+            self.policy_net = BodyGenPolicySingle(cfg.policy_specs, self)
+        elif self.use_neo_reconfig:
+            print("Using Neo Reconfigurable Policy Network")
+            self.policy_net = BodyGenPolicyNeoReconfig(cfg.policy_specs, self)
         else:
             self.policy_net = BodyGenPolicy(cfg.policy_specs, self)
         to_device(self.device, self.policy_net)
         
     def setup_value(self):
         cfg = self.cfg
-        if self.use_reconfig and not self.reconfig_single:
+        if self.use_reconfig and not self.reconfig_single and not self.use_single:
             print("Using Reconfigurable Value Network")
             self.value_net = BodyGenReconfigValue(cfg.value_specs, self)
-        elif self.use_reconfig and self.reconfig_single:
+        elif self.use_reconfig and self.reconfig_single and not self.use_single:
             print("Using Reconfigurable Single Value Network")
             self.value_net = BodyGenValueReconfigSingle(cfg.value_specs, self)
+        elif self.use_single:
+            print("Using Single Value Network")
+            self.value_net = BodyGenValueSingle(cfg.value_specs, self)
+        elif self.use_neo_reconfig:
+            print("Using Neo Reconfigurable Value Network")
+            self.value_net = BodyGenNeoReconfigValue(cfg.value_specs, self)
         else:
             self.value_net = BodyGenValue(cfg.value_specs, self)
         to_device(self.device, self.value_net)
@@ -362,19 +380,23 @@ class BodyGenAgent(AgentPPO):
         return x
 
     def get_perm_batch_design(self, states):
-        if self.use_reconfig and not self.reconfig_single:
+        if (self.use_reconfig or self.use_neo_reconfig) and not self.reconfig_single and not self.use_single:
             inds = [[], [], [], []]
-        elif self.use_reconfig and self.reconfig_single:
+        elif self.reconfig_single and not self.use_single:
             inds = [[], []]
+        elif self.use_single:
+            inds = [[]]
         else:
             inds = [[], [], []]
         for i, x in enumerate(states):
             use_transform_action = x[2]
             inds[use_transform_action.item()].append(i)
-        if self.use_reconfig and not self.reconfig_single:
+        if (self.use_reconfig or self.use_neo_reconfig) and not self.reconfig_single and not self.use_single:
             perm = np.array(inds[0] + inds[1] + inds[2] + inds[3])
-        elif self.use_reconfig and self.reconfig_single:
-            perm = np.array(inds[0] + inds[1])       
+        elif self.reconfig_single and not self.use_single:
+            perm = np.array(inds[0] + inds[1])
+        elif self.use_single:
+            perm = np.array(inds[0])       
         else:
             perm = np.array(inds[0] + inds[1] + inds[2])
         return perm, LongTensor(perm).to(self.device)

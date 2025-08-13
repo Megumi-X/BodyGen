@@ -5,7 +5,7 @@ enable_wandb: false
 cfg: null
 render: false
 tmp: false
-num_threads: 64
+num_threads: 40
 gpu_index: 0
 epoch: '0'
 show_noise: false
@@ -37,7 +37,7 @@ norm_return : true
 norm_advantage: true
 max_grad_norm: 40
 uni_obs_norm: true
-xml_name: "default"
+# xml_name: "default"
 planner_demean: false
 
 seed: 1
@@ -60,6 +60,7 @@ policy_specs:
   attr_log_std: -2.3
   fix_control_std: false
   fix_attr_std: false
+  fix_reconfig_std: false
 
   skel_message_type: 'transformer'
   control_message_type: 'transformer'

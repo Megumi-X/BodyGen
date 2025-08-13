@@ -166,3 +166,5 @@ cython_debug/
 
 out/
 single/
+terminals/
+nohup.out

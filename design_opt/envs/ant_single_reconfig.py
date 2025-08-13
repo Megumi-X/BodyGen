@@ -48,7 +48,7 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
         self.sim_obs_dim = self.get_sim_obs().shape[-1]
         self.attr_fixed_dim = self.get_attr_fixed().shape[-1]
         self.actuator_masks = None
-        self.reconfig_action_ratio = cfg.reconfig_specs.get('reconfig_action_ratio', 50)
+        self.reconfig_action_ratio = cfg.reconfig_specs.get('reconfig_action_ratio', 25)
         self.init_joint_ranges = deepcopy(self.model.jnt_range)
 
     def allow_add_body(self, body):
@@ -119,7 +119,7 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
             if self.actuator_masks[i] == 1:
                 qpos_address = self.model.jnt_qposadr[joint_id]
                 current_joint_pos = self.sim.data.qpos[qpos_address]
-                self.model.jnt_range[joint_id] = [current_joint_pos - 5e-2, current_joint_pos + 5e-2]
+                self.model.jnt_range[joint_id] = [current_joint_pos - 0.08, current_joint_pos + 0.08]
 
     def reconfig_release(self):
         for i in range(4):
@@ -140,6 +140,7 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
             return self._get_obs(), 0, False, False, {'use_transform_action': False, 'stage': 'execution'}
 
         self.cur_t += 1
+        accumulate_reward = 0
         # reconfig stage
         if self.stage == 'reconfig':
             reconfig_a = a[:, self.control_action_dim: 2 * self.control_action_dim]
@@ -153,6 +154,7 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
 
             ob = self._get_obs()
             reward = 0
+            accumulate_reward = 0
             termination = truncation = False
             return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'reconfig'}
         # execution stage
@@ -190,6 +192,7 @@ class AntSingleReconfigEnv(MujocoEnv, utils.EzPickle):
             termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height) and (abs(ang) < np.deg2rad(max_ang)))
             truncation = not (self.control_nsteps < max_nsteps)
             ob = self._get_obs()
+            accumulate_reward += reward
             if self.control_nsteps % self.reconfig_action_ratio == 0:
                 self.transit_reconfig()
             return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'execution'}

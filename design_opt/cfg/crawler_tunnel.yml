@@ -1,6 +1,7 @@
 env_name: ant_tunnel
 agent_specs:
   batch_design: true
+xml_name: "default"
 # training parameters
 gamma: 0.995
 tau: 0.95

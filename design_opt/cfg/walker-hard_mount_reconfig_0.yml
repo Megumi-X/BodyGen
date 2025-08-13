@@ -1,17 +1,21 @@
-env_name: walker_mount_reconfig
+env_name: walker_reconfig
 agent_specs:
   batch_design: true
+xml_name: "walker_mount"
 # training parameters
 gamma: 0.995
 tau: 0.95
 policy_specs:
   control_log_std: 0
+  reconfig_log_std: 0
 
 robot_param_scale: 1
 skel_transform_nsteps: 5
 
 done_condition:
   max_ang: 720
+  min_height: 0.0
+  max_height: 10.0
 
 obs_specs:
   attr: ['depth']
@@ -27,7 +31,7 @@ add_body_condition:
 
 reconfig_specs:
   reconfig: true
-  intrinsic_reward_coeff: 0.0
+  
 
 robot:
   param_mapping: sin

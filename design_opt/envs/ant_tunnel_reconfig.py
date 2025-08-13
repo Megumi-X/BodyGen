@@ -3,19 +3,21 @@ from gym import utils
 from khrylib.rl.envs.common.mujoco_env_gym import MujocoEnv
 from khrylib.robot.xml_robot import Robot
 from khrylib.utils import get_single_body_qposaddr, get_graph_fc_edges
+from khrylib.utils.transformation import quaternion_matrix
 from copy import deepcopy
 import mujoco_py
 import time
 import os
 
 
-class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
+class AntTunnelReconfigEnv(MujocoEnv, utils.EzPickle):
     def __init__(self, cfg, agent):
         self.cur_t = 0
         self.cfg = cfg
+        self.env_specs = cfg.env_specs
         self.agent = agent
         if self.cfg.xml_name == "default":
-            self.model_xml_file = os.path.join(cfg.project_path, "assets", "mujoco_envs", "walker_gap.xml")
+            self.model_xml_file = os.path.join(cfg.project_path, "assets", "mujoco_envs", "ant_tunnel.xml")
         else:
             self.model_xml_file = os.path.join(cfg.project_path, "assets", "mujoco_envs", f"{self.cfg.xml_name}.xml")
         # robot xml
@@ -34,8 +36,7 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
         self.design_cur_params = self.design_ref_params.copy()
         self.design_param_names = self.robot.get_params(get_name=True)
         self.attr_design_dim = self.design_ref_params.shape[-1]
-        add_body_condition = self.cfg.add_body_condition
-        self.index_base = add_body_condition.get('index_base', 5)
+        self.index_base = 5
         self.stage = 'skeleton_transform'    # transform or execute
         self.control_nsteps = 0
         self.sim_specs = set(cfg.obs_specs.get('sim', []))
@@ -46,10 +47,10 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
         self.skel_num_action = 3 if cfg.enable_remove else 2
         self.sim_obs_dim = self.get_sim_obs().shape[-1]
         self.attr_fixed_dim = self.get_attr_fixed().shape[-1]
-        self.ground_geoms = np.where(self.model.geom_bodyid == 0)[0]
         self.actuator_masks = None
-        self.reconfig_action_ratio = cfg.reconfig_specs.get('reconfig_action_ratio', 50)
+        self.reconfig_action_ratio = cfg.reconfig_specs.get('reconfig_action_ratio', 25)
         self.reconfig_state_count = {}
+        self.init_joint_ranges = None
 
     def allow_add_body(self, body):
         add_body_condition = self.cfg.add_body_condition
@@ -87,7 +88,6 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
         design_params = in_design_params
         for params, body in zip(design_params, self.robot.bodies):
             body.set_params(params, pad_zeros=True, map_params=True)
-            # new_params = body.get_params([], pad_zeros=True, demap_params=True)
             body.sync_node()
 
         xml_str = self.robot.export_xml_string()
@@ -108,33 +108,35 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
         assert a.shape[0] == len(self.robot.bodies)
         for body, body_a in zip(self.robot.bodies[1:], a[1:]):
             aname = body.get_actuator_name()
-            aind = self.model.actuator_names.index(aname)
-            ctrl[aind] = body_a
+            if aname in self.model.actuator_names:
+                aind = self.model.actuator_names.index(aname)
+                ctrl[aind] = body_a
         return ctrl
-    
+
     def reconfig_fix(self):
         for i in range(self.model.nu):
             joint_id = self.model.actuator_trnid[i, 0]
-            if joint_id < 0:
-                continue
+            assert self.model.joint_names[joint_id] == f"{i + 1}_joint"
             if self.actuator_masks[i] == 1:
                 qpos_address = self.model.jnt_qposadr[joint_id]
                 current_joint_pos = self.sim.data.qpos[qpos_address]
-                self.model.jnt_range[joint_id] = [current_joint_pos - 5e-2, current_joint_pos + 5e-2]
+                self.model.jnt_range[joint_id] = [current_joint_pos - 0.08, current_joint_pos + 0.08]
 
     def reconfig_release(self):
         for i in range(self.model.nu):
             joint_id = self.model.actuator_trnid[i, 0]
             if joint_id < 0:
                 continue
-            self.model.jnt_range[joint_id] = [-np.pi, np.pi]
+            self.model.jnt_range[joint_id] = self.init_joint_ranges[joint_id].copy()
 
     def set_reconfig(self, reconfig_params):
+        if self.init_joint_ranges is None:
+            self.init_joint_ranges = self.model.jnt_range.copy()
         reconfig_params = self.action_to_control(reconfig_params)
         self.reconfig_release()
         self.actuator_masks = reconfig_params.copy()
         self.reconfig_fix()
-        return True
+        return True        
 
     def step(self, a, train=True):
         if not self.is_inited:
@@ -165,15 +167,18 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
             succ = self.set_design_params(design_params)
             if not succ:
                 return self._get_obs(), 0.0, True, False, {'use_transform_action': True, 'stage': 'attribute_transform'}
+
             if self.cur_t == self.cfg.skel_transform_nsteps + 1:
-                self.transit_reconfig()
+                succ = self.transit_reconfig()
+                if not succ:
+                    return self._get_obs(), 0.0, True, False, {'use_transform_action': True, 'stage': 'attribute_transform'}
 
             ob = self._get_obs()
             reward = 0.0
             termination = truncation = False
             return ob, reward, termination, truncation, {'use_transform_action': True, 'stage': 'attribute_transform'}
         # reconfig stage
-        elif self.stage == 'reconfig':
+        if self.stage == 'reconfig':
             reconfig_a = a[:, self.control_action_dim: 2 * self.control_action_dim]
             self.set_reconfig(reconfig_a)
             if self.control_nsteps == 0:
@@ -185,9 +190,6 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
 
             ob = self._get_obs()
             reward = 0
-            if train:
-                self.reconfig_state_count[reconfig_a.tobytes()] = self.reconfig_state_count.get(reconfig_a.tobytes(), 0) + 1
-                reward = self.cfg.reconfig_specs.get('intrinsic_reward_coeff', 20.0) / np.sqrt(self.reconfig_state_count[reconfig_a.tobytes()])
             termination = truncation = False
             return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'reconfig'}
         # execution stage
@@ -196,7 +198,8 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
             assert np.all(a[:, self.control_action_dim:] == 0)
             control_a = a[:, :self.control_action_dim]
             ctrl = self.action_to_control(control_a) * (np.ones_like(self.actuator_masks) - self.actuator_masks)
-            posbefore = self.sim.data.qpos[0]
+            ctrl_cost_coeff = self.cfg.reward_specs.get('ctrl_cost_coeff', 1e-4)
+            xposbefore = self.get_body_com("0")[0]
 
             try:
                 self.do_simulation(ctrl, self.frame_skip)
@@ -204,25 +207,26 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
                 print(self.cur_xml_str)
                 return self._get_obs(), 0, True, False, {'use_transform_action': False, 'stage': 'execution'}
 
-            posafter, height, ang = self.sim.data.qpos[0:3]
+            xposafter = self.get_body_com("0")[0]
+            reward_fwd = (xposafter - xposbefore) / self.dt
+            reward_ctrl = - ctrl_cost_coeff * np.square(ctrl).mean()
             alive_bonus = self.cfg.reward_specs.get('alive_bonus', 0.0)
-            reward = (posafter - posbefore) / self.dt
-            reward += alive_bonus
+            reward = reward_fwd + reward_ctrl + alive_bonus
             scale = self.cfg.reward_specs.get('exec_reward_scale', 1.0)
             reward *= scale
 
             s = self.state_vector()
-            # misc
+            height = s[2]
+            zdir = quaternion_matrix(s[3:7])[:3, 2]
+            ang = np.arccos(zdir[2])
             done_condition = self.cfg.done_condition
-            min_height = done_condition.get('min_height', -2.0)
-            max_height = done_condition.get('max_height', 10.0)
+            min_height = done_condition.get('min_height', 0.0)
+            max_height = done_condition.get('max_height', 2.0)
             max_ang = done_condition.get('max_ang', 3600)
             max_nsteps = done_condition.get('max_nsteps', 1000)
             termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height) and (abs(ang) < np.deg2rad(max_ang)))
             truncation = not (self.control_nsteps < max_nsteps)
             ob = self._get_obs()
-            if self.control_nsteps % self.reconfig_action_ratio == 0:
-                self.transit_reconfig()
             return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'execution'}
     
     def transit_attribute_transform(self):
@@ -244,7 +248,6 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
     def transit_execution_running(self):
         self.stage = 'execution'
         return True
-        
 
     def if_use_transform_action(self):
         return ['skeleton_transform', 'attribute_transform', 'reconfig', 'execution'].index(self.stage)
@@ -259,20 +262,21 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
             if self.clip_qvel:
                 qvel = np.clip(qvel, -10, 10)
             if i == 0:
-                obs_i = [np.flip(self.data.qpos[1:3]), np.flip(qvel[:3])]
+                obs_i = [self.data.qpos[2:7], qvel[:6], np.zeros(2)]
             else:
                 qs, qe = get_single_body_qposaddr(self.model, body.name)
-                assert qe - qs == 1
-                obs_i = [self.data.qpos[qs:qe], np.zeros(1), qvel[qs:qe], np.zeros(2)]
-                # print(qs)
+                if qe - qs >= 1:
+                    assert qe - qs == 1
+                    obs_i = [np.zeros(11), self.data.qpos[qs:qe], qvel[qs-1:qe-1]]
+                    # print(qs)
+                else:
+                    obs_i = [np.zeros(13)]
             if 'root_offset' in self.sim_specs:
                 offset = self.data.body_xpos[self.model._body_name2id[body.name]][[0, 2]] - root_pos[[0, 2]]
                 obs_i.append(offset)
             obs_i = np.concatenate(obs_i)
             obs.append(obs_i)
         obs = np.stack(obs)
-        if self.control_nsteps == 1:
-            assert np.count_nonzero(obs[:, :5]) == self.model.nq + self.model.nv - 1
         return obs
 
     def get_attr_fixed(self):
@@ -314,7 +318,7 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
             index.append(ind)
         index = np.array(index)
         return index
-    
+
     def get_body_height(self):
         heights = []
         for i, body in enumerate(self.robot.bodies):
@@ -357,35 +361,19 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
             all_obs.append(distances)
         if self.use_position_encoding:
             lapPE = self.robot.get_laplacian_position_encoding()
-            all_obs.append(lapPE)
+            all_obs.append(lapPE)        
         return all_obs
 
     def reset_state(self, add_noise):
         if add_noise:
-            qpos = self.init_qpos + self.np_random.uniform(low=-.005, high=.005, size=self.model.nq)
-            qvel = self.init_qvel + self.np_random.uniform(low=-.005, high=.005, size=self.model.nv)
+            qpos = self.init_qpos + self.np_random.uniform(low=-.1, high=.1, size=self.model.nq)
+            qvel = self.init_qvel + self.np_random.uniform(low=-.1, high=.1, size=self.model.nv)
         else:
             qpos = self.init_qpos
             qvel = self.init_qvel
-
-        if self.stage == 'execution' and self.cfg.env_init_height:
-            qpos[1] = 0.0
-            while True:
-                self.set_state(qpos, qvel)
-                has_contact = False
-                for contact in self.data.contact[:self.data.ncon]:
-                    g1, g2 = contact.geom1, contact.geom2
-                    # print(f'g1: {g1} g2: {g2}')
-                    if g1 in self.ground_geoms or g2 in self.ground_geoms:
-                        has_contact = True
-                        break
-                if has_contact:
-                    qpos[1] += 0.05
-                else:
-                    break
-            self.reconfig_fix()
-        else:
-            self.set_state(qpos, qvel)
+        if self.env_specs.get('init_height', True):
+            qpos[2] = 0.4
+        self.set_state(qpos, qvel)
 
     def reset_robot(self):
         del self.robot
@@ -404,8 +392,9 @@ class WalkerGapReconfigEnv(MujocoEnv, utils.EzPickle):
         return self._get_obs()
 
     def viewer_setup(self):
-        self.viewer.cam.distance = 5
-        self.viewer.cam.lookat[2] = 1.15
-        self.viewer.cam.lookat[0] = self.data.qpos[0] 
+        # self.viewer.cam.trackbodyid = 2
+        self.viewer.cam.distance = 10
+        # self.viewer.cam.lookat[2] = 1.15
+        self.viewer.cam.lookat[:2] = self.data.qpos[:2] 
         self.viewer.cam.elevation = -10
         self.viewer.cam.azimuth = 110

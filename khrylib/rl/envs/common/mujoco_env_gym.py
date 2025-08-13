@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from math import isnan
 import os
 
 from gym import error, spaces
@@ -148,6 +149,10 @@ class MujocoEnv(gym.Env):
         self.sim.data.ctrl[:] = ctrl
         for _ in range(n_frames):
             self.sim.step()
+        if np.isnan(self.sim.data.qpos).any() or np.isnan(self.sim.data.qvel).any() or np.isinf(self.sim.data.qpos).any() or np.isinf(self.sim.data.qvel).any():
+            return False
+        else:
+            return True
 
     def render(self,
                mode='human',

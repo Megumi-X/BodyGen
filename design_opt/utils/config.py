@@ -65,7 +65,7 @@ class Config:
         self.uni_obs_norm = FLAG.get('uni_obs_norm', False)
         self.norm_return = FLAG.get('norm_return', True)
         self.reward_shift = FLAG.get('reward_shift', 0.0)
-        self.xml_name = FLAG.get('xml_name', 'default')
+        self.xml_name = cfg.get('xml_name', 'default')
         self.planner_demean = FLAG.get('planner_demean', False)
         
         self.enable_wandb = FLAG.get('enable_wandb', True)

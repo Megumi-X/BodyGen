@@ -1,17 +1,18 @@
-env_name: walker_gap_reconfig
+env_name: ant_single
 agent_specs:
   batch_design: true
+xml_name: "default"
 # training parameters
 gamma: 0.995
 tau: 0.95
 policy_specs:
-  control_log_std: 0
+  control_log_std: -0.5
 
 robot_param_scale: 1
 skel_transform_nsteps: 5
 
 done_condition:
-  max_ang: 720
+  max_ang: 180
 
 obs_specs:
   attr: ['depth']
@@ -20,21 +21,21 @@ obs_specs:
   clip_qvel: true
   use_projected_params: true
   use_body_ind: true
-max_body_depth: 4
+max_body_depth: 5
 
 add_body_condition:
-  max_nchild: 3
+  max_nchild: 4
 
 reconfig_specs:
-  reconfig: true
-  intrinsic_reward_coeff: 20.0
+  use_single: true
 
 robot:
   param_mapping: sin
+  no_root_offset: true
   
   body_params:
     offset:
-      type: 'xz'
+      type: 'xy'
       lb: [-0.5, -0.5]
       ub: [0.5, 0.5]
 
@@ -43,14 +44,14 @@ robot:
   geom_params:
     size:
       lb: 0.03
-      ub: 0.08
+      ub: 0.10
     ext_start:
       lb: 0.0
-      ub: 0.5
+      ub: 0.2
 
   actuator_params:
     gear:
       lb: 20
       ub: 400
-
   
+

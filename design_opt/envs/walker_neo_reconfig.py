@@ -1,21 +1,23 @@
 import numpy as np
 from gym import utils
+from sympy import false
 from khrylib.rl.envs.common.mujoco_env_gym import MujocoEnv
 from khrylib.robot.xml_robot import Robot
 from khrylib.utils import get_single_body_qposaddr, get_graph_fc_edges
 from copy import deepcopy
+from design_opt.utils.pid import PIDController
 import mujoco_py
 import time
 import os
 
 
-class WalkerSandEnv(MujocoEnv, utils.EzPickle):
+class WalkerNeoReconfigEnv(MujocoEnv, utils.EzPickle):
     def __init__(self, cfg, agent):
         self.cur_t = 0
         self.cfg = cfg
         self.agent = agent
         if self.cfg.xml_name == "default":
-            self.model_xml_file = os.path.join(cfg.project_path, "assets", "mujoco_envs", "walker_sand.xml")
+            self.model_xml_file = os.path.join(cfg.project_path, "assets", "mujoco_envs", "walker_wall.xml")
         else:
             self.model_xml_file = os.path.join(cfg.project_path, "assets", "mujoco_envs", f"{self.cfg.xml_name}.xml")
         # robot xml
@@ -47,6 +49,18 @@ class WalkerSandEnv(MujocoEnv, utils.EzPickle):
         self.sim_obs_dim = self.get_sim_obs().shape[-1]
         self.attr_fixed_dim = self.get_attr_fixed().shape[-1]
         self.ground_geoms = np.where(self.model.geom_bodyid == 0)[0]
+        self.actuator_marks = None
+        self.qpos_marks = None
+        self.config_qposes = None
+        self.current_config = 0
+        self.reconfig_action_ratio = cfg.reconfig_specs.get('reconfig_action_ratio', 25)
+        self.max_reconfig_steps = cfg.reconfig_specs.get('max_reconfig_steps', 5000)
+        self.reconfig_qpos_rtol = cfg.reconfig_specs.get('reconfig_qpos_rtol', 0.1)
+        self.reconfig_qpos_atol = cfg.reconfig_specs.get('reconfig_qpos_atol', 0.2)
+        self.reconfig_qvel_rtol = cfg.reconfig_specs.get('reconfig_qvel_rtol', 0.1)
+        self.reconfig_qvel_atol = cfg.reconfig_specs.get('reconfig_qvel_atol', 1)
+        self.pid_controller = None
+        self.reconfiged = False
 
     def allow_add_body(self, body):
         add_body_condition = self.cfg.add_body_condition
@@ -107,7 +121,98 @@ class WalkerSandEnv(MujocoEnv, utils.EzPickle):
             aname = body.get_actuator_name()
             aind = self.model.actuator_names.index(aname)
             ctrl[aind] = body_a
-        return ctrl        
+        return ctrl
+    
+    def reconfig_fix(self):
+        for i in range(self.model.nu):
+            joint_id = self.model.actuator_trnid[i, 0]
+            if joint_id < 0:
+                continue
+            if self.actuator_marks[i] == 1:
+                qpos_address = self.model.jnt_qposadr[joint_id]
+                current_joint_pos = self.sim.data.qpos[qpos_address]
+                self.model.jnt_range[joint_id] = [current_joint_pos - 0.08, current_joint_pos + 0.08]
+
+    def reconfig_release(self):
+        for i in range(self.model.nu):
+            joint_id = self.model.actuator_trnid[i, 0]
+            if joint_id < 0:
+                continue
+            self.model.jnt_range[joint_id] = [-np.pi, np.pi]
+
+    def joint_qpos(self, input):
+        qpos = self.sim.data.qpos.copy()
+        for i in range(self.model.nu):
+            joint_id = self.model.actuator_trnid[i, 0]
+            if joint_id < 0:
+                continue
+            qpos_address = self.model.jnt_qposadr[joint_id]
+            if self.actuator_marks[i] == 1:
+                qpos[qpos_address] = np.clip(input[i], self.model.jnt_range[joint_id, 0], self.model.jnt_range[joint_id, 1])
+        return qpos
+    
+    def actuator_mark_to_qpos(self):
+        self.qpos_marks = np.zeros_like(self.sim.data.qpos)
+        for i in range(self.model.nu):
+            joint_id = self.model.actuator_trnid[i, 0]
+            if joint_id < 0:
+                continue
+            qpos_address = self.model.jnt_qposadr[joint_id]
+            if self.actuator_marks[i] == 1:
+                self.qpos_marks[qpos_address] = 1
+            
+    def set_reconfig(self, reconfig_params):
+        params = [self.action_to_control(reconfig_params[:, i]) for i in range(3)]
+        self.actuator_marks = np.zeros_like(params[-1])
+        for i in range(self.model.nu):
+            if params[-1][i] > 0:
+                self.actuator_marks[i] = 1
+        self.actuator_mark_to_qpos()
+        self.config_qposes = np.vstack([self.joint_qpos(params[0]), self.joint_qpos(params[1])])
+        self.set_state(self.config_qposes[0, :], np.zeros_like(self.sim.data.qvel))
+        self.reconfig_fix()
+        self.pid_controller = PIDController(self.model, self.sim, Kp=self.cfg.reconfig_specs.get('Kp', 300.0),
+                                            Ki=self.cfg.reconfig_specs.get('Ki', 10.0),
+                                            Kd=self.cfg.reconfig_specs.get('Kd', 1.0),
+                                            integral_clamp=self.cfg.reconfig_specs.get('integral_clamp', 10.0))
+        return True
+    
+    def reconfig(self, target_config):
+        target_qpos = self.config_qposes[target_config, :]
+        self.reconfig_release()
+        self.pid_controller.reset()
+        complete_tag = False
+        for i in range(self.max_reconfig_steps):
+            ctrl = self.pid_controller.pid_control_geared(target_qpos, self.qpos_marks)
+            succ = self.do_simulation(ctrl, 1)
+            if not succ:
+                print(f"Reconfiguration to config {target_config} failed at step {i}.")
+                print("Current qpos:", self.sim.data.qpos * self.qpos_marks)
+                print("Target qpos:", target_qpos * self.qpos_marks)
+                print("Current qvel:", self.sim.data.qvel * self.qpos_marks)
+                return False
+            if self.check_reconfig_success(target_config):
+                complete_tag = True
+                # print(f"Step used: {i}")
+                break
+        self.reconfig_fix()
+        if not complete_tag:
+            print(f"Reconfiguration to config {target_config} failed.")
+            print("Current qpos:", self.sim.data.qpos * self.qpos_marks)
+            print("Target qpos:", target_qpos * self.qpos_marks)
+            print("Current qvel:", self.sim.data.qvel * self.qpos_marks)
+            return False
+        else:
+            self.current_config = target_config
+            return True
+        
+    def check_reconfig_success(self, target_config):
+        target_qpos = self.config_qposes[target_config, :]
+        current_qpos = self.sim.data.qpos.copy()
+        current_qvel = self.sim.data.qvel.copy()
+        qpos_close = np.allclose(current_qpos * self.qpos_marks, target_qpos * self.qpos_marks, rtol=self.reconfig_qpos_rtol, atol=self.reconfig_qpos_atol)
+        qvel_close = np.allclose(current_qvel * self.qpos_marks, 0, rtol=self.reconfig_qvel_rtol, atol=self.reconfig_qvel_atol)
+        return qpos_close and qvel_close
 
     def step(self, a, train=True):
         if not self.is_inited:
@@ -130,7 +235,7 @@ class WalkerSandEnv(MujocoEnv, utils.EzPickle):
             return ob, reward, termination, truncation, {'use_transform_action': True, 'stage': 'skeleton_transform'}
         # attribute transform stage
         elif self.stage == 'attribute_transform':
-            design_a = a[:, self.control_action_dim:-1] 
+            design_a = a[:, 5:-1] 
             if self.abs_design:
                 design_params = design_a * self.cfg.robot_param_scale
             else:
@@ -138,28 +243,52 @@ class WalkerSandEnv(MujocoEnv, utils.EzPickle):
             succ = self.set_design_params(design_params)
             if not succ:
                 return self._get_obs(), 0.0, True, False, {'use_transform_action': True, 'stage': 'attribute_transform'}
-
             if self.cur_t == self.cfg.skel_transform_nsteps + 1:
-                succ = self.transit_execution()
-                if not succ:
-                    return self._get_obs(), 0.0, True, False, {'use_transform_action': True, 'stage': 'attribute_transform'}
+                self.transit_reconfig_design()
 
             ob = self._get_obs()
             reward = 0.0
             termination = truncation = False
             return ob, reward, termination, truncation, {'use_transform_action': True, 'stage': 'attribute_transform'}
+        # reconfig stage
+        elif self.stage == 'reconfig_design':
+            reconfig_a = a[:, 2: 5]
+            self.set_reconfig(reconfig_a)
+            succ = self.transit_execution()
+            if not succ:
+                return self._get_obs(), 0.0, True, False, {'use_transform_action': False, 'stage': 'reconfig_design'}
+
+            ob = self._get_obs()
+            reward = 0
+            termination = truncation = False
+            return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'reconfig_design'}
         # execution stage
         else:
             self.control_nsteps += 1
-            assert np.all(a[:, self.control_action_dim:] == 0)
-            control_a = a[:, :self.control_action_dim]
-            ctrl = self.action_to_control(control_a)
+            control_a = a[:, :2]
+            ctrl = self.action_to_control(control_a[:, 0]) * (np.ones_like(self.actuator_marks) - self.actuator_marks)
+            reconfig_flag = self.action_to_control(control_a[:, 1])
+            config_switch = np.mean(reconfig_flag) > 0
+            single_reconfig = self.cfg.reconfig_specs.get('single_reconfig', False)
+            if config_switch and self.control_nsteps % self.reconfig_action_ratio == 0 and (not self.reconfiged or not single_reconfig):
+                target_config = (self.current_config + 1) % 2
+                posbefore = self.sim.data.qpos[0]
+                succ = self.reconfig(target_config)
+                posafter = self.sim.data.qpos[0]
+                reward = (posafter - posbefore) / self.dt
+                self.reconfiged = True
+                if not succ:
+                    return self._get_obs(), reward, True, False, {'use_transform_action': False, 'stage': 'execution'}
+                else:
+                    return self._get_obs(), reward, False, False, {'use_transform_action': False, 'stage': 'execution'}
             posbefore = self.sim.data.qpos[0]
 
             try:
-                self.do_simulation(ctrl, self.frame_skip)
+                succ = self.do_simulation(ctrl, self.frame_skip)
             except:
                 print(self.cur_xml_str)
+                return self._get_obs(), 0, True, False, {'use_transform_action': False, 'stage': 'execution'}
+            if not succ:
                 return self._get_obs(), 0, True, False, {'use_transform_action': False, 'stage': 'execution'}
 
             posafter, height, ang = self.sim.data.qpos[0:3]
@@ -172,8 +301,8 @@ class WalkerSandEnv(MujocoEnv, utils.EzPickle):
             s = self.state_vector()
             # misc
             done_condition = self.cfg.done_condition
-            min_height = done_condition.get('min_height', -5.0)
-            max_height = done_condition.get('max_height', 8.0)
+            min_height = done_condition.get('min_height', 0.0)
+            max_height = done_condition.get('max_height', 5.0)
             max_ang = done_condition.get('max_ang', 3600)
             max_nsteps = done_condition.get('max_nsteps', 1000)
             termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height) and (abs(ang) < np.deg2rad(max_ang)))
@@ -183,6 +312,9 @@ class WalkerSandEnv(MujocoEnv, utils.EzPickle):
     
     def transit_attribute_transform(self):
         self.stage = 'attribute_transform'
+
+    def transit_reconfig_design(self):
+        self.stage = 'reconfig_design'
 
     def transit_execution(self):
         self.stage = 'execution'
@@ -196,7 +328,7 @@ class WalkerSandEnv(MujocoEnv, utils.EzPickle):
         
 
     def if_use_transform_action(self):
-        return ['skeleton_transform', 'attribute_transform', 'execution'].index(self.stage)
+        return ['skeleton_transform', 'attribute_transform', 'reconfig_design', 'execution'].index(self.stage)
 
     def get_sim_obs(self):
         obs = []
@@ -332,6 +464,7 @@ class WalkerSandEnv(MujocoEnv, utils.EzPickle):
                     qpos[1] += 0.05
                 else:
                     break
+            self.reconfig_fix()
         else:
             self.set_state(qpos, qvel)
 

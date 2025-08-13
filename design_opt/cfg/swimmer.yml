@@ -1,6 +1,7 @@
 env_name: swimmer
 agent_specs:
   batch_design: true
+xml_name: "default"
 # training parameters
 gamma: 0.995
 tau: 0.95
@@ -44,6 +45,6 @@ robot:
   actuator_params:
     gear:
       lb: 20
-      ub: 300
+      ub: 400
 
   
