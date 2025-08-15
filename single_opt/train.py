@@ -17,9 +17,25 @@ from argparse import ArgumentParser
 
 # Import the custom environment
 from single_opt.envs.walker import WalkerEnv
-from single_opt.envs.ant import AntSingleReconfigEnv, AntSingleEnv, AntSingleNeoReconfigEnv
+from single_opt.envs.ant import AntSingleReconfigEnv, AntSingleEnv, AntSingleNeoReconfigEnv, AntNeoReconfigEnv
 
-current_env = AntSingleNeoReconfigEnv
+env_dict = {
+    'AntSingleReconfig': AntSingleReconfigEnv,
+    'AntSingle': AntSingleEnv,
+    'AntSingleNeoReconfig': AntSingleNeoReconfigEnv,
+    'AntNeoReconfig': AntNeoReconfigEnv,
+}
+
+parser = ArgumentParser()
+parser.add_argument('--train', action='store_true', help='Train the model')
+parser.add_argument('--test', action='store_true', help='Test the model')
+parser.add_argument('--env', type=str, default='AntSingleNeoReconfig', help='Environment name')
+parser.add_argument('--xml', type=str, default='ant_single_tunnel_1', help='xml name')
+args = parser.parse_args()
+log_path = f'single/logs/{args.env}-{args.xml}'
+model_path = f'single/models/{args.env}-{args.xml}'
+
+current_env = env_dict[args.env]
 
 class SaveVecNormalizeCallback(EvalCallback):
     def __init__(self, 
@@ -100,7 +116,7 @@ def train(log_path, model_path, env_name):
         gae_lambda=0.97,
         vf_coef=0.5,
         policy_kwargs=dict(
-            net_arch=[dict(pi=[256, 256], vf=[256, 256])],
+            net_arch=[dict(pi=[512, 512], vf=[512, 512])],
             activation_fn=torch.nn.ReLU
         ),
     )
@@ -167,13 +183,6 @@ def visualize(model_path, max_num_frames=1000, env_name='ant_single_tunnel_1'):
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser()
-    parser.add_argument('--train', action='store_true', help='Train the model')
-    parser.add_argument('--test', action='store_true', help='Test the model')
-    parser.add_argument('--env', type=str, default='ant_single_tunnel_1', help='Environment name')
-    args = parser.parse_args()
-    log_path = f'single/logs/{args.env}-1'
-    model_path = f'single/models/{args.env}-1'
     if args.train:
         train(log_path, model_path, env_name=args.env)
     elif args.test:
@@ -181,7 +190,6 @@ if __name__ == "__main__":
     else:
         print("Please specify --train or --test")
         exit(1)
-
     # fr = 0  
     
     # model_file = os.path.join(model_path, "best_model.zip") 
