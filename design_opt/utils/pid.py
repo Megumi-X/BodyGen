@@ -52,3 +52,34 @@ class PIDController:
     
     def reset(self):
         self.pid_integral_error = np.zeros(self.model.nq)
+
+class PIDControllerSingle:
+    def __init__(self, Kp, Ki, Kd, integral_clamp, setpoint=0):
+        self.Kp = Kp
+        self.Ki = Ki
+        self.Kd = Kd
+        self.integral_clamp = integral_clamp
+        self.setpoint = setpoint
+        self._integral = 0
+        self._previous_error = 0
+        
+    def reset(self):
+        self._integral = 0
+        self._previous_error = 0
+
+
+    def compute(self, measurement, dt):
+        error = self.setpoint - measurement
+        
+        self._integral += error * dt
+        self._integral = np.clip(self._integral, -self.integral_clamp, self.integral_clamp)
+        derivative = (error - self._previous_error) / dt
+        
+        output = (self.Kp * error) + (self.Ki * self._integral) + (self.Kd * derivative)
+        
+        self._previous_error = error
+        
+        return output
+
+    def set_target(self, new_setpoint):
+        self.setpoint = new_setpoint
