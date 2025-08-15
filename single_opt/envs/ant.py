@@ -618,7 +618,7 @@ class AntNeoReconfigEnv(MujocoEnv, utils.EzPickle):
         self.init_jnt_range = deepcopy(self.model.jnt_range)
         self.pid_controller = [PIDControllerSingle(Kp=1000.0, Ki=1.0, Kd=100.0, integral_clamp=10.0) for _ in range(self.model.nu)]
         self.max_reconfig_steps = 1000
-        self.configs = [np.array([0.0, 0.0, 0.0, 0.0]), np.array([-1, 1, -1, 1])]
+        self.configs = [np.array([0.0, 0.0, 0.0, 0.0]), np.array([-1., 1., -1., 1.])]
         self.current_config = 0
         self.reconfig_qpos_rtol = 0.05
         self.reconfig_qpos_atol = 0.05
@@ -717,11 +717,11 @@ class AntNeoReconfigEnv(MujocoEnv, utils.EzPickle):
 
     def step(self, a):
         if not self.is_inited:
-            return self._get_obs(), 0, False, {'use_transform_action': False, 'stage': 'design'}
+            return self._get_obs(), 0, False, False, {'use_transform_action': False, 'stage': 'design'}
         
         if self.stage == 'design':
             angle = a[0] *  np.pi / 4
-            self.configs[1] *= angle
+            self.configs[1] = angle * self.configs[1]
             self.stage = 'execution'
             return self._get_obs(), 0, False, {'use_transform_action': False, 'stage': 'design'}
         elif self.stage == 'execution':

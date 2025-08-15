@@ -79,16 +79,16 @@ def create_cosine_annealing_schedule(lr_initial: float, lr_final: float) -> Call
         return current_lr
     return _scheduler
 
-def train(log_path, model_path, env_name):
+def train(log_path, model_path, xml_name):
     # Create log and model directories
     os.makedirs(log_path, exist_ok=True)
     os.makedirs(model_path, exist_ok=True)
 
     # Create the environment
-    env = DummyVecEnv([lambda: current_env(env_name=env_name)])
+    env = DummyVecEnv([lambda: current_env(env_name=xml_name)])
     env = vec_check_nan.VecCheckNan(env, raise_exception=True)
     env = vec_normalize.VecNormalize(env, norm_obs=True, norm_reward=True, clip_obs=10.0)
-    eval_env = DummyVecEnv([lambda: current_env(env_name=env_name)])
+    eval_env = DummyVecEnv([lambda: current_env(env_name=xml_name)])
     eval_env = vec_check_nan.VecCheckNan(eval_env, raise_exception=True)
     eval_env = vec_normalize.VecNormalize(eval_env, norm_obs=True, norm_reward=False, clip_obs=10.0)
     env.save(os.path.join(model_path, "vec_normalize.pkl"))
@@ -151,7 +151,7 @@ def train(log_path, model_path, env_name):
     print(f"--- Training Finished. Final model saved to {final_model_path} ---")
     env.close()
 
-def visualize(model_path, max_num_frames=1000, env_name='ant_single_tunnel_1'):
+def visualize(model_path, max_num_frames=1000, xml_name='ant_single_tunnel_1'):
     fr = 0  
     
     model_file = os.path.join(model_path, "best_model.zip") 
@@ -159,7 +159,7 @@ def visualize(model_path, max_num_frames=1000, env_name='ant_single_tunnel_1'):
 
     frame_dir = f'out/single_videos/single_frames'
     os.makedirs(frame_dir, exist_ok=True)
-    env = DummyVecEnv([lambda: current_env(env_name=env_name, render_folder=frame_dir)])
+    env = DummyVecEnv([lambda: current_env(env_name=xml_name, render_folder=frame_dir)])
     env = vec_normalize.VecNormalize.load(stats_path, env)
     env.training = False
     env.norm_reward = False
@@ -177,16 +177,16 @@ def visualize(model_path, max_num_frames=1000, env_name='ant_single_tunnel_1'):
         state = next_state
 
     env.close()
-    save_video_ffmpeg(f'{frame_dir}/%04d.png', f'out/single_videos/{env_name}.mp4', fps=30)
+    save_video_ffmpeg(f'{frame_dir}/%04d.png', f'out/single_videos/{xml_name}.mp4', fps=30)
     if os.path.exists(frame_dir):
         shutil.rmtree(frame_dir)
 
 
 if __name__ == "__main__":
     if args.train:
-        train(log_path, model_path, env_name=args.env)
+        train(log_path, model_path, xml_name=args.xml)
     elif args.test:
-        visualize(model_path, env_name=args.env)
+        visualize(model_path, env_name=args.xml)
     else:
         print("Please specify --train or --test")
         exit(1)
