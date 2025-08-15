@@ -166,10 +166,12 @@ def visualize(model_path, max_num_frames=1000, xml_name='ant_single_tunnel_1'):
     
     model = PPO.load(model_file, env=env)
     state = env.reset()
+    reward = 0.0
     
     for _ in range(10000):
         action, _ = model.predict(state, deterministic=True)
         next_state, env_reward, terminated, info = env.step(action)
+        reward += env_reward[0]
         if fr >= max_num_frames:
             break
         if terminated:
@@ -177,6 +179,7 @@ def visualize(model_path, max_num_frames=1000, xml_name='ant_single_tunnel_1'):
         state = next_state
 
     env.close()
+    print(f"Total reward: {reward}, Frames rendered: {fr}")
     save_video_ffmpeg(f'{frame_dir}/%04d.png', f'out/single_videos/{xml_name}.mp4', fps=30)
     if os.path.exists(frame_dir):
         shutil.rmtree(frame_dir)
@@ -186,7 +189,7 @@ if __name__ == "__main__":
     if args.train:
         train(log_path, model_path, xml_name=args.xml)
     elif args.test:
-        visualize(model_path, env_name=args.xml)
+        visualize(model_path, xml_name=args.xml)
     else:
         print("Please specify --train or --test")
         exit(1)
